@@ -1,0 +1,32 @@
+# ESP-IDF
+build/
+sdkconfig
+sdkconfig.old
+*.bin
+*.elf
+*.map
+managed_components/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+main/leaflet.js
+main/leaflet.css
+main/web_assets.h
+main/gen_web_assets.py

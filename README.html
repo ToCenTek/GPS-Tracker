@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>GPS追踪系统 - 开发文档</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;line-height:1.6;color:#333;background:#f5f5f5}
+.container{max-width:960px;margin:0 auto;padding:20px}
+h1{text-align:center;color:#1a73e8;padding:30px 0;border-bottom:3px solid #1a73e8}
+h2{color:#1a73e8;margin-top:40px;padding:15px;background:#e8f0fe;border-radius:8px}
+h3{color:#34a853;margin-top:25px;border-left:4px solid #34a853;padding-left:15px}
+p,li{margin:12px 0;text-align:justify}
+ul,ol{margin:15px 0 15px 30px}
+code{background:#f8f9fa;padding:2px 8px;border-radius:4px;font-family:"Consolas",monospace;color:#d63384}
+pre{background:#1e1e1e;color:#d4d4d4;padding:20px;border-radius:8px;overflow-x:auto;margin:15px 0}
+table{width:100%;border-collapse:collapse;margin:15px 0}
+th,td{border:1px solid #dee2e6;padding:12px;text-align:left}
+th{background:#e8f0fe;color:#1a73e8}
+tr:nth-child(even){background:#f8f9fa}
+.note{background:#fff3cd;border-left:4px solid #ffc107;padding:15px;margin:15px 0;border-radius:4px}
+.warning{background:#f8d7da;border-left:4px solid #dc3545;padding:15px;margin:15px 0;border-radius:4px}
+.info{background:#d1ecf1;border-left:4px solid #17a2b8;padding:15px;margin:15px 0;border-radius:4px}
+.section{background:white;border-radius:12px;padding:25px;margin:20px 0;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
+footer{text-align:center;padding:30px;color:#666;font-size:14px}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>GPS追踪系统 <span style="font-size:16px;color:#999">TCT</span></h1>
+
+<div class="section">
+<h2>1. 系统概述</h2>
+<p>基于 Xtensa LX6 双核 240MHz + TD1030（BDS B1 / GPS L1 / GLONASS L1 三频点）GNSS 模块，通过 WiFi 热点提供 Web 界面，支持实时位置显示、轨迹记录、区域绘制、网格划分。附带 OLED 屏幕显示关键数据。</p>
+<ul>
+<li><strong>WiFi SoftAP</strong>: SSID <code>GPS</code>, 密码通过 <code>menuconfig</code> 配置（默认 <code>12345678</code>，建议编译前修改）</li>
+<li><strong>Web (SoftAP 模式)</strong>: <code>http://192.168.4.1</code> (Canvas 离线网格)</li>
+<li><strong>Web (Station 模式)</strong>: <code>http://10.0.0.67</code> (Leaflet + 高德地图)</li>
+<li><strong>OLED</strong>: 0.96" SSD1306/SSD1315, <code>I2C</code> (<code>SDA</code>=21, <code>SCL</code>=22), 软件 <code>I2C</code> (bit-bang)</li>
+<li><strong>串口</strong>: 浏览串口日志确认系统状态</li>
+</ul>
+<div class="note"><strong>关于 OLED 驱动</strong>：当前使用软件 <code>I2C</code> (bit-bang) 实现，运行稳定，兼容各版本 <code>ESP-IDF</code>。硬件 <code>I2C</code> 驱动在不同 <code>IDF</code> 版本间存在兼容性差异，暂时不切换。</div>
+</div>
+
+<div class="section">
+<h2>2. 硬件规格</h2>
+<table>
+<tr><th>组件</th><th>型号/规格</th></tr>
+<tr><td>MCU</td><td>Xtensa LX6 双核 @240MHz, 520KB SRAM, 4MB Flash</td></tr>
+<tr><td>GNSS</td><td>TD1030 — BDS B1 / GPS L1 / GLONASS L1 三频点</td></tr>
+<tr><td>OLED</td><td>0.96" 128×64, SSD1306/SSD1315, <code>I2C</code> 地址 <code>0x3C</code></td></tr>
+<tr><td>GNSS 接口</td><td><code>UART1</code>: <code>TX</code>=17, <code>RX</code>=16, <code>115200bps</code></td></tr>
+<tr><td>OLED 接口</td><td><code>I2C0</code>: <code>SDA</code>=21, <code>SCL</code>=22 (软件 <code>I2C</code>)</td></tr>
+<tr><td>持久存储</td><td><code>NVS</code> (WiFi 凭据、网格数据)</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>3. 资源占用</h2>
+<table>
+<tr><th>资源</th><th>已用</th><th>剩余</th><th>总计</th></tr>
+<tr><td><code>IRAM</code>（指令 RAM）</td><td>101.8 KB (77.7%)</td><td>29.3 KB</td><td>131 KB</td></tr>
+<tr><td><code>DRAM</code>（数据 RAM）</td><td>77.1 KB (42.6%)</td><td>103.7 KB</td><td>176 KB</td></tr>
+<tr><td>Flash（固件）</td><td>1.08 MB</td><td>~0.89 MB</td><td>1.87 MB (app 分区)</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>4. 功能模块</h2>
+
+<h3>4.1 WiFi</h3>
+<ul>
+<li><strong>SoftAP + Station 同时工作</strong>，SoftAP 始终可用</li>
+<li>Station 可扫描/连接外部 WiFi（无断开按钮，防止误操作）</li>
+<li>SoftAP 连接数上限 4 个</li>
+</ul>
+
+<h3>4.2 HTTP 服务器</h3>
+<ul>
+<li>端口 <code>80</code>，嵌入式 HTML（~50KB，含 Leaflet 库）</li>
+<li>在线模式：Leaflet + 高德地图 (style=8, <code>maxZoom</code>=20, <code>maxNativeZoom</code>=18)</li>
+<li>离线模式：Canvas 坐标格网 + 10×10 演示网格</li>
+<li>Canvas 支持拖拽、滚轮缩放、悬停显示格子 ID</li>
+</ul>
+
+<h3>4.3 GNSS 解析</h3>
+<ul>
+<li><code>NMEA 0183</code> V4.11，波特率 <code>115200</code></li>
+<li>解析 <code>RMC</code>（位置/速度）、<code>GGA</code>（海拔/卫星数）</li>
+<li>原始 <code>NMEA</code> 语句按类型缓存，通过 <code>/nmea</code> 端点读取</li>
+<li>线程安全的数据读取（互斥锁）</li>
+<li>时间自动转换为北京时间 (<code>UTC+8</code>)</li>
+</ul>
+
+<h3>4.4 OLED 显示</h3>
+<ul>
+<li>软件 <code>I2C</code> (bit-bang) 驱动，兼容性好，不受硬件 <code>I2C</code> 驱动版本影响</li>
+<li>开机 30 秒冷启动倒计时</li>
+<li>30 秒后：黑底白字实时数据（IP / 时间 / 网格 ID / 经纬度 / 速度）</li>
+<li>网格 ID 放大居中显示</li>
+</ul>
+
+<h3>4.5 网格管理</h3>
+<ul>
+<li>从 GPS 轨迹生成闭合区域</li>
+<li>按用户输入的边长进行正方形网格划分</li>
+<li>网格编号 <code>row,col</code>（左下角开始）</li>
+<li>数据存储在 <code>NVS</code> 分区，重启不丢失</li>
+<li>演示模式：Canvas / Leaflet 自动显示 10×10 网格</li>
+</ul>
+
+<h3>4.6 GNSS 接收机控制</h3>
+<ul>
+<li>波特率设置（<code>$CCCAS</code>）</li>
+<li>定位间隔（<code>$CCINV</code>，以 Hz 显示）</li>
+<li>工作模式切换 + 冷/温/热启动（<code>$CCSIR</code>）</li>
+<li><code>NMEA</code> 语句输出控制（<code>$CCMSG</code>，左列按钮 + 实时预览）</li>
+<li>恢复默认（<code>$CCDFT</code>，所有设置恢复出厂）</li>
+<li>原始 <code>NMEA</code> 命令输入（带校验码验证）</li>
+</ul>
+</div>
+
+<div class="section">
+<h2>5. API 接口</h2>
+<table>
+<tr><th>端点</th><th>方法</th><th>说明</th></tr>
+<tr><td><code>/</code></td><td>GET</td><td>Web 主界面</td></tr>
+<tr><td><code>/gps</code></td><td>GET</td><td>解析后的 GPS 实时数据</td></tr>
+<tr><td><code>/nmea</code></td><td>GET</td><td>原始 NMEA 语句（当前按类型缓存的最新一条）</td></tr>
+
+<tr><td><code>/grid</code></td><td>GET</td><td>当前位置 + 所在网格 ID</td></tr>
+<tr><td><code>/grid</code></td><td>POST</td><td>从区域划分网格</td></tr>
+<tr><td><code>/config</code></td><td>POST</td><td>发送 NMEA 指令</td></tr>
+<tr><td><code>/wifi/status</code></td><td>GET</td><td>WiFi 状态（Station/SoftAP）</td></tr>
+<tr><td><code>/wifi/scan</code></td><td>GET</td><td>扫描 WiFi 热点</td></tr>
+<tr><td><code>/wifi/connect</code></td><td>POST</td><td>连接 Station 网络</td></tr>
+<tr><td><code>/leaflet.js</code></td><td>GET</td><td>Leaflet 地图引擎（内部使用，不要直接访问）</td></tr>
+<tr><td><code>/leaflet.css</code></td><td>GET</td><td>Leaflet 样式（内部使用，不要直接访问）</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>6. GPS JSON 格式</h2>
+<pre>{
+  "bj_time":          "203456.000",    // 北京时间 HHMMSS.SSS
+  "status":           "A/V",           // A=有效 V=无效
+  "latitude":         "30.294300 N",   // 纬度 + 方向
+  "longitude":        "120.166300 E",  // 经度 + 方向
+  "speed_knots":      1.23,            // 速度(节)
+  "course":           45.0,            // 航向(度)
+  "date":             "230394",        // 日期 DDMMYY
+  "magnetic_variation":"0.1 E",       // 磁偏角 + 方向
+  "mode":             "A",             // 定位模式
+  "altitude":         545.4,           // 海拔(米)
+  "speed_kmh":        2.28,            // km/h
+  "speed_ms":         0.63,            // m/s
+  "satellites":       8,               // 卫星数
+  "grid":             "1,1"            // 网格ID(row,col)
+}</pre>
+</div>
+
+<div class="section">
+<h2>7. OLED 显示布局</h2>
+<pre>┌──────────────────────────────────────┐
+│ 192.168.4.1                  S  08   │  IP  模式  卫星数
+│ 20:34:56                             │  北京时间
+│         3,7                           │  网格ID 放大居中
+│ N30.2943  E120.1663                  │  经纬度
+│ 1.2kn  2.3kmh  545m                  │  速度(节+kmh) 海拔
+└──────────────────────────────────────┘</pre>
+</div>
+
+<div class="section">
+<h2>8. 项目结构</h2>
+<pre>GPS/
+├── gps_tracker/
+│   ├── CMakeLists.txt
+│   ├── partitions.csv
+│   └── main/
+│       ├── CMakeLists.txt
+│       ├── main.c              主程序
+│       ├── wifi_manager.c/.h   WiFi SoftAP + Station 管理
+│       ├── gps_parser.c/.h     NMEA 解析 (UART1)
+│       ├── http_server.c/.h    HTTP 服务器 + API
+│       ├── grid_manager.c/.h   网格划分 + NVS 存储
+│       ├── receiver_config.c/.h TD1030 配置指令
+│       ├── oled_display.c/.h   SSD1306 驱动 (bit-bang I2C)
+│       └── index.html          Web UI 界面 (~400行)
+├── README.html
+└── .gitignore</pre>
+</div>
+
+<div class="section">
+<h2>9. 开发日志</h2>
+<table>
+<tr><th>版本</th><th>日期</th><th>变更</th></tr>
+<tr><td>1.0</td><td>2026-05-11</td><td>初始版本：<code>ESP-IDF</code> 项目结构、WiFi SoftAP+Station、OLED、GPS 解析、网格管理</td></tr>
+<tr><td>2.0</td><td>2026-05-12</td><td>Web UI 大重构：Leaflet 高德地图、在线/离线检测、Canvas 网格回退</td></tr>
+<tr><td>2.1</td><td>2026-05-13</td><td>统一北京时间、整理 API 端点、去掉危险按钮、网格可视化增强、软件 <code>I2C</code> 稳定运行</td></tr>
+</table>
+</div>
+
+<footer>文档版本: 2.1 | 2026-05-13</footer>
+</div>
+</body>
+</html>

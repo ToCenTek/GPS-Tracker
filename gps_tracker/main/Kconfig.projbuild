@@ -1,0 +1,10 @@
+menu "GPS Tracker Configuration"
+
+    config WIFI_AP_PASSWORD
+        string "WiFi SoftAP Password"
+        default "12345678"
+        help
+            Password for the GPS tracker's WiFi SoftAP.
+            Change this before flashing to your own device.
+
+endmenu
