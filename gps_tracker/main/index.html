@@ -15,7 +15,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .btn{display:inline-flex;align-items:center;gap:6px;padding:10px 20px;border:none;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;transition:.15s;white-space:nowrap}
 .btn:active{transform:scale(.95)}.btn-primary{background:var(--p);color:#fff}.btn-success{background:var(--s);color:#fff}.btn-danger{background:var(--d);color:#fff}
 .btn-outline{background:transparent;border:1.5px solid var(--b);color:var(--t)}.btn-sm{padding:6px 14px;font-size:12px}
-#sb{position:fixed;top:0;left:0;right:0;z-index:1000;background:var(--c);padding:8px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--b);height:48px;font-size:13px}
+#sb{position:fixed;top:0;left:0;right:0;z-index:1000;background:var(--c);padding:8px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--b);height:48px;font-size:13px}
 .si{display:flex;align-items:center;gap:4px;color:var(--ts)}.si .dot{width:8px;height:8px;border-radius:50%}.dg{background:var(--s)}.dr{background:var(--d)}.si .v{color:var(--t);font-weight:600}
 #map{position:fixed;top:48px;left:0;right:0;bottom:0;z-index:1;background:#e8ecf0}
 .leaflet-control-zoom a{background:var(--c)!important;color:var(--t)!important;border-color:var(--b)!important}
@@ -58,13 +58,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
   <div class="si"><span class="dot dr" id="gps-dot"></span><span id="gps-st">等待</span></div>
   <div class="si">🛰 <span class="v" id="sat-n">0</span></div>
   <div class="si">📦 <span class="v" id="gid-n">0</span></div>
-  <div style="display:flex;margin:0 auto;gap:4px">
+  <div id="sb-center" style="position:absolute;left:50%;transform:translateX(-50%);display:flex;gap:4px;align-items:center">
     <button class="tb-btn" id="btn-center" title="回位置" style="width:36px;height:36px;padding:0;border:none;border-radius:8px;background:transparent;color:var(--ts);font-size:20px;cursor:pointer;line-height:1">📍</button>
     <button class="tb-btn" id="btn-north" title="航向指北" style="flex-shrink:0;width:34px;height:34px;padding:0;border:none;border-radius:8px;display:flex;align-items:center;justify-content:center;background:transparent"><svg width="24" height="24" viewBox="-12 -12 24 24"><circle cx="0" cy="0" r="10" fill="none" stroke="var(--ts)" stroke-width="2"/><polygon id="north-arrow" points="0,-8 -3,4 0,1 3,4" fill="var(--ts)"/></svg></button>
   </div>
-  <div style="display:flex;margin-left:auto;align-items:center;gap:8px">
-    <span style="font-size:12px;padding:2px 8px;border-radius:12px;background:#e8f0fe;color:var(--p);font-weight:600" id="wfb">SoftAP</span>
-    <div class="si">📍 <span class="v" id="gps-ll">--</span></div>
+  <div style="display:flex;margin-left:auto;align-items:center;gap:8px;overflow:hidden">
+    <span style="font-size:12px;padding:2px 8px;border-radius:12px;background:#e8f0fe;color:var(--p);font-weight:600;white-space:nowrap" id="wfb">SoftAP</span>
+    <div class="si" style="white-space:nowrap">📍 <span class="v" id="gps-ll">--</span></div>
   </div>
   <span style="display:none;font-size:12px;font-weight:700;color:var(--d)" id="rec-ind">●录制中</span>
 </div>
