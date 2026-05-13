@@ -271,11 +271,9 @@ function fGPS(){fetch('/gps').then(function(r){return r.json();}).then(function(
   document.getElementById('p-sat').textContent=d.satellites||0;
   document.getElementById('p-gid').textContent=d.grid||'0';
   document.getElementById('tb-gid').textContent='📦 '+(d.grid||'0');
-  if(gps.v){
-    if(stRec=='rec'){trk.push([gps.la,gps.lg]);if(leafTrack)leafTrack.setLatLngs(trk.map(function(p){var g=wgs84_to_gcj02(p[0],p[1]);return [g.lat,g.lng];}));}
-    postTrk.push([gps.la,gps.lg]);if(postTrk.length>1&&leafPostTrack)leafPostTrack.setLatLngs(postTrk.map(function(p){var g=wgs84_to_gcj02(p[0],p[1]);return [g.lat,g.lng];}));
-    if(postTrk.length==1&&leafPostTrack)L.circleMarker([gps.la,gps.lg],{radius:3,color:'#e67e22'}).addTo(lmap);
-  }
+  postTrk.push([gps.la,gps.lg]);
+  if(postTrk.length>1&&leafPostTrack)leafPostTrack.setLatLngs(postTrk.map(function(p){var g=wgs84_to_gcj02(p[0],p[1]);return [g.lat,g.lng];}));
+  if(gps.v&&stRec=='rec'){trk.push([gps.la,gps.lg]);if(leafTrack)leafTrack.setLatLngs(trk.map(function(p){var g=wgs84_to_gcj02(p[0],p[1]);return [g.lat,g.lng];}));}
   centerGPS();
   }catch(e){}}).catch(function(){}).then(function(){setTimeout(fGPS,1000);});}
 fGPS();
