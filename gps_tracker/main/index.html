@@ -297,9 +297,10 @@ function fGPS(){fetch('/gps').then(function(r){return r.json();}).then(function(
   if(leafGps&&gps.v){leafGps.setLatLng([gps.la,gps.lg]);if(isT)leafTrack.addLatLng([gps.la,gps.lg]);
     // 旋转航向箭头
     var el=leafGps.getElement();if(el){var d=el.querySelector('div');if(d)d.style.transform='rotate('+gps.course+'deg)';}
-    // 自动跟随
-    if(typeof follow!=='undefined'&&follow)lmap.setView([gps.la,gps.lg],lmap.getZoom());}
-  dr();}).catch(function(){});}
+    // 自动跟随 (首次zoom到18级, 之后保持当前级别)
+    if(follow){var z=lmap.getZoom();if(z<16)z=18;lmap.setView([gps.la,gps.lg],z);}}
+  // Canvas 首次定位居中 (zoom=0表示未居中过)
+  if(!online&&gps.v&&zoom===0){cL=gps.la;cG=gps.lg;zoom=2;}
 setInterval(fGPS,1000);fGPS();
 
 // ===== 原始NMEA =====
