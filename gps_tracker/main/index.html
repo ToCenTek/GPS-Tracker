@@ -366,7 +366,7 @@ function fWS(){fetch('/wifi/status').then(function(r){return r.json();}).then(fu
   document.getElementById('w-st').textContent=d.connected?'':'未接入任何热点，无法加载地图！';
   document.getElementById('wfb').textContent=d.connected?'Station':'SoftAP';
   var g=document.getElementById('w-gd');
-  if(d.connected){document.getElementById('w-gd-text').textContent='📶 Station 已连 '+d.station_ssid+'，API 访问地址变更为 http://'+d.station;g.style.display='block';}else{g.style.display='none';}}).catch(function(){});}
+  if(d.connected){document.getElementById('w-gd-text').innerHTML='📶 Station 已连至 '+d.station_ssid+'，访问设备切换到该热点。<br><span style="padding-left:24px">API 访问地址已变更为：<a href="http://'+d.station+'" style="color:var(--p);font-weight:600;text-decoration:underline">http://'+d.station+'</a></span>';g.style.display='block';}else{g.style.display='none';}}).catch(function(){});}
 document.getElementById('w-pw-eye').addEventListener('click',function(){
   var pw=document.getElementById('w-pw');var eye=document.getElementById('w-pw-eye');
   if(pw.type==='password'){pw.type='text';eye.textContent='👁️';}else{pw.type='password';eye.textContent='🙈';}});
