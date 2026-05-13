@@ -12,14 +12,14 @@
 
 ## 硬件规格
 
-| 组件      | 型号/规格                                          |
-| ------- | ---------------------------------------------- |
-| MCU     | Xtensa LX6 双核 @240MHz, 520KB SRAM, 4MB Flash   |
+| 组件      | 型号/规格                                                       |
+| ------- | ----------------------------------------------------------- |
+| MCU     | Xtensa LX6 双核 @240MHz, 520KB SRAM, 4MB Flash                |
 | GNSS    | N305-5Q (TD1050) — BDS B1I/B1C / GPS L1 / GLO L1OF / GAL E1 |
-| OLED    | 0.96" 128×64, SSD1306/SSD1315, I2C 地址 `0x3C` |
-| GNSS 接口 | UART1: `TX`=17, `RX`=16, `115200bps`           |
-| OLED 接口 | SDA=21, SCL=22 (软件 I2C bit-bang)              |
-| 持久存储    | `nvs` (WiFi 凭据) + `nvs_grid` (网格参数, 256KB)   |
+| OLED    | 0.96" 128×64, SSD1306/SSD1315, I2C 地址 `0x3C`                |
+| GNSS 接口 | UART1: `TX`=17, `RX`=16, `115200bps`                        |
+| OLED 接口 | SDA=21, SCL=22 (软件 I2C bit-bang)                            |
+| 持久存储    | `nvs` (WiFi 凭据) + `nvs_grid` (网格参数, 256KB)                  |
 
 ## 资源占用
 
@@ -86,22 +86,22 @@
 
 ## API 接口
 
-| 端点               | 方法   | 说明                            |
-| ----------------- | ------ | ------------------------------ |
-| `/`               | GET    | Web 主界面（Cache-Control: no-cache） |
-| `/gps`            | GET    | 格式化 JSON 实时 GPS 数据             |
-| `/gps.json`       | GET    | `/gps` 别名，向后兼容                 |
-| `/grid`           | GET    | 当前位置 + 所在网格 ID                |
-| `/grid`           | POST   | 从 4 角点+步长生成参数化网格              |
-| `/grid/data`      | GET    | 完整网格参数 + 前 500 格边界用于显示        |
-| `/nmea`           | GET    | 原始 NMEA 语句缓存                    |
-| `/config`         | POST   | 发送 NMEA 指令                     |
-| `/wifi/status`    | GET    | WiFi 状态（Station/SoftAP）        |
-| `/wifi/scan`      | GET    | 扫描 WiFi 热点                     |
-| `/wifi/connect`   | POST   | 连接 Station 网络                  |
-| `/wifi/disconnect`| POST   | 断开 Station 连接                  |
-| `/leaflet.js`     | GET    | Leaflet 地图引擎（内部使用）            |
-| `/leaflet.css`    | GET    | Leaflet 样式（内部使用）              |
+| 端点                 | 方法   | 说明                               |
+| ------------------ | ---- | -------------------------------- |
+| `/`                | GET  | Web 主界面（Cache-Control: no-cache） |
+| `/gps`             | GET  | 格式化 JSON 实时 GPS 数据               |
+| `/gps.json`        | GET  | `/gps` 别名，向后兼容                   |
+| `/grid`            | GET  | 当前位置 + 所在网格 ID                   |
+| `/grid`            | POST | 从 4 角点+步长生成参数化网格                 |
+| `/grid/data`       | GET  | 完整网格参数 + 前 500 格边界用于显示           |
+| `/nmea`            | GET  | 原始 NMEA 语句缓存                     |
+| `/config`          | POST | 发送 NMEA 指令                       |
+| `/wifi/status`     | GET  | WiFi 状态（Station/SoftAP）          |
+| `/wifi/scan`       | GET  | 扫描 WiFi 热点                       |
+| `/wifi/connect`    | POST | 连接 Station 网络                    |
+| `/wifi/disconnect` | POST | 断开 Station 连接                    |
+| `/leaflet.js`      | GET  | Leaflet 地图引擎（内部使用）               |
+| `/leaflet.css`     | GET  | Leaflet 样式（内部使用）                 |
 
 ## GPS JSON 格式
 
@@ -177,11 +177,12 @@ GPS/
 | --- | ---------- | -------------------------------------------------------- |
 | 1.0 | 2026-05-11 | 初始版本：`ESP-IDF` 项目结构、WiFi SoftAP+Station、OLED、GPS 解析、网格管理 |
 | 2.0 | 2026-05-12 | Web UI 大重构：Leaflet 高德地图、在线/离线检测、Canvas 网格回退              |
-| 2.1 | 2026-05-13 | 统一北京时间、整理 API 端点、去掉危险按钮、网格可视化增强、软件 `I2C` 稳定运行 |
+| 2.1 | 2026-05-13 | 统一北京时间、整理 API 端点、去掉危险按钮、网格可视化增强、软件 `I2C` 稳定运行            |
 
 ## 当前状态
 
 ### ✅ 已固化（勿随意改动）
+
 - GPS NMEA 解析（RMC + GGA，北京时间 `bj_time`）
 - OLED 实时数据展示（冷启动倒计时 → 定位数据）
 - HTTP API 结构（`/gps`, `/nmea`, `/grid`, `/wifi/*`, `/config`）
@@ -193,11 +194,13 @@ GPS/
 - Kconfig 密码配置（`menuconfig` → GPS Tracker Configuration）
 
 ### 🔴 待办
+
 - [ ] 旋转区域网格（参数化网格已预留 `angle` 字段，前端计算旋转 OBB 即可）
 - [ ] 实地大规模测试（公里级区域+2m步长的查询性能验证）
 - [ ] 长期稳定性测试（连续运行内存泄漏检查）
 
 ### ✅ 已完成功能
+
 - [x] 参数化网格：无格子数量上限，O(1) 查询，256KB NVS 持久化
 - [x] 航向指北/地图指北切换（N↑/H↑ 按钮，Canvas+Leaflet 同步）
 - [x] 停止记录后持续画线（灰色虚线，不计入轨迹点）
@@ -212,9 +215,9 @@ GPS/
 - [x] GPS 定位自动居中（独立 500ms 轮询 + fGPS 双路径）
 
 ### ⚠️ 已知问题
+
 - Captive Portal（强制门户）已放弃：DNS socket 耗尽 lwIP socket 池导致 HTTP 服务崩溃
 - iPhone 热点兼容性差：需开启「最大兼容性」，成功率和稳定性不如安卓
 - IRAM 占用 78%，后续加功能需注意
 - 无 NAT 转发，SoftAP 客户端不能通过 STA 上网
 - 无身份认证，WiFi 密码为唯一安全屏障
-
