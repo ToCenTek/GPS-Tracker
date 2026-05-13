@@ -173,12 +173,12 @@ document.getElementById('btn-north').addEventListener('click',function(){heading
 
 var stRec='idle';
 function recShow(){
+  document.getElementById('trk-i').textContent='轨迹:'+recTrk.length;
   document.getElementById('rec-ind').style.display=stRec!='idle'?'inline':'none';
   document.getElementById('rec-ind').textContent=stRec=='rec'?'●录制中':'⏸已暂停';
   document.getElementById('rec-ind').style.color=stRec=='rec'?'var(--d)':'var(--w)';
   document.getElementById('trk-s').textContent=stRec=='rec'?'⏸暂停':'▶开始';
   document.getElementById('trk-s').className=stRec=='rec'?'btn btn-warning':'btn btn-success';
-  document.getElementById('trk-i').textContent='轨迹:'+trk.length;
 }
 document.getElementById('trk-s').addEventListener('click',function(){
   if(stRec=='rec'){stRec='paused';recShow();toa('已暂停','info');}
@@ -247,7 +247,7 @@ function fGPS(){fetch('/gps').then(function(r){return r.json();}).then(function(
   gps.v=f;if(f){gps.la=parseFloat(d.latitude);gps.lg=parseFloat(d.longitude);gps.course=d.course;gps.speed=d.speed_kmh||0;}
   trk.push([gps.la,gps.lg]);if(leafTrack)leafTrack.setLatLngs(trk.map(function(p){var g=wgs84_to_gcj02(p[0],p[1]);return [g.lat,g.lng];}));
   if(stRec=='rec'){recTrk.push([gps.la,gps.lg]);if(leafRecTrack)leafRecTrack.setLatLngs(recTrk.map(function(p){var g=wgs84_to_gcj02(p[0],p[1]);return [g.lat,g.lng];}));}
-  document.getElementById('gps-st').textContent=(f?'定位':'等待')+' trk:'+trk.length+' rec:'+recTrk.length+' r:'+stRec;
+  document.getElementById('gps-st').textContent=f?'定位':'等待';
   document.getElementById('trk-i').textContent='轨迹:'+recTrk.length;
   document.getElementById('gps-dot').className='dot '+(f?'dg':'dr');
   document.getElementById('sat-n').textContent=d.satellites||0;
