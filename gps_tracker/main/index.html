@@ -160,7 +160,7 @@ var lmap=L.map('map',{center:[30.2943,120.1663],zoom:16,maxZoom:22});
 L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',{subdomains:['1','2','3','4'],maxZoom:22,maxNativeZoom:18}).addTo(lmap);
 lmap.invalidateSize();
 leafGps=L.marker([30.2943,120.1663],{icon:L.divIcon({className:'',
-  html:'<div style="width:40px;height:40px;display:flex;align-items:center;justify-content:center"><svg width="40" height="40" viewBox="-20 -20 40 40"><circle cx="0" cy="0" r="18" fill="rgba(26,115,232,.85)" stroke="#fff" stroke-width="3"/><polyline points="-9,-8 0,10 9,-8" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>',
+  html:'<div style="width:40px;height:40px;display:flex;align-items:center;justify-content:center"><svg width="40" height="40" viewBox="-20 -20 40 40"><circle cx="0" cy="0" r="18" fill="rgba(26,115,232,.85)" stroke="#fff" stroke-width="3"/><polyline points="-9,8 0,-10 9,8" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>',
   iconSize:[40,40],iconAnchor:[20,20]})}).addTo(lmap);
 leafTrack=L.polyline([],{color:'#1a73e8',weight:6,opacity:.8}).addTo(lmap);
 leafPostTrack=L.polyline([],{color:'#e67e22',weight:5,opacity:.8}).addTo(lmap);
