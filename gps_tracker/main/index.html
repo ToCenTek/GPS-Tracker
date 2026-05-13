@@ -169,7 +169,7 @@ follow=true;
 // ===== 按钮事件 =====
 function centerGPS(){if(!gps.v)return;var gcj=wgs84_to_gcj02(gps.la,gps.lg);leafGps.setLatLng([gcj.lat,gcj.lng]);var e=leafGps.getElement();if(e){var svg=e.querySelector('svg');if(svg){svg.style.transform=headingUp?'rotate(0deg)':'rotate('+gps.course+'deg)';var c=svg.querySelector('circle');if(c)c.setAttribute('fill',stRec=='rec'?'rgba(230,126,34,.85)':'rgba(26,115,232,.85)');}}lmap.setView([gcj.lat,gcj.lng],Math.max(lmap.getZoom(),16),{animate:false});var sf2=Math.min((gps.speed||0)/30,1);if(sf2>0.01)lmap.panBy([0,sf2*0.25*lmap.getSize().y],{animate:false});if(headingUp){lmap.getContainer().style.transform='rotate('+(-gps.course)+'deg)';lmap.getContainer().style.transformOrigin='50% 50%';}follow=true;}
 document.getElementById('btn-center').addEventListener('click',centerGPS);
-document.getElementById('btn-north').addEventListener('click',function(){headingUp=!headingUp;this.classList.toggle('act',headingUp);var a=this.querySelector('#north-arrow');if(a)a.style.transform=headingUp?'rotate(0deg)':'rotate(-45deg)';var e=leafGps&&leafGps.getElement();if(e){var s=e.querySelector('svg');if(s)s.style.transform=headingUp?'rotate(0deg)':'';}if(lmap&&gps.v)lmap.getContainer().style.transform=headingUp?'rotate('+(-gps.course)+'deg)':'';});
+document.getElementById('btn-north').addEventListener('click',function(){headingUp=!headingUp;var a=this.querySelector('#north-arrow');if(a)a.style.transform=headingUp?'rotate(0deg)':'rotate(-45deg)';var e=leafGps&&leafGps.getElement();if(e){var s=e.querySelector('svg');if(s)s.style.transform=headingUp?'rotate(0deg)':'';}if(lmap&&gps.v)lmap.getContainer().style.transform=headingUp?'rotate('+(-gps.course)+'deg)':'';});
 
 var stRec='idle';
 function recShow(){
@@ -271,11 +271,12 @@ function fGPS(){fetch('/gps').then(function(r){return r.json();}).then(function(
   document.getElementById('p-sat').textContent=d.satellites||0;
   document.getElementById('p-gid').textContent=d.grid||'0';
   document.getElementById('tb-gid').textContent='📦 '+(d.grid||'0');
-  centerGPS();
+  if(follow)centerGPS();
   }catch(e){}}).catch(function(){}).then(function(){setTimeout(fGPS,1000);});}
 fGPS();
 // 独立轮询: 检测到GPS定位后自动居中 (不依赖fGPS的调用链)
-setInterval(function(){if(gps.v&&lmap)centerGPS();},500);
+setInterval(function(){if(gps.v&&lmap&&follow)centerGPS();},500);
+lmap.on('dragstart',function(){follow=false;});
 
 // ===== 原始NMEA =====
 function fNMEA(){fetch('/nmea').then(function(r){return r.json();}).then(function(d){
