@@ -6,6 +6,7 @@
 #include "esp_http_server.h"
 #include "esp_log.h"
 #include "lwip/sockets.h"
+#include "lwip/inet.h"
 #include <string.h>
 #include <stdio.h>
 #include <cJSON.h>
@@ -269,18 +270,19 @@ static esp_err_t redirect_404_handler(httpd_req_t *req, httpd_err_code_t err)
     return ESP_OK;
 }
 
-/* DNS 劫持: 所有域名 → 192.168.4.1 */
+/* DNS 劫持: 仅监听 SoftAP IP (192.168.4.1), 避免与 STA DNS 冲突 */
 static void dns_task(void *arg)
 {
     (void)arg;
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) { ESP_LOGE(TAG, "DNS socket 失败"); vTaskDelete(NULL); return; }
-    struct sockaddr_in addr = { .sin_family = AF_INET, .sin_port = htons(53), .sin_addr = { .s_addr = htonl(INADDR_ANY) } };
+    struct sockaddr_in addr = { .sin_family = AF_INET, .sin_port = htons(53) };
+    addr.sin_addr.s_addr = inet_addr("192.168.4.1");
     if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        ESP_LOGW(TAG, "DNS 端口 53 被占用, Captive Portal 不可用");
+        ESP_LOGW(TAG, "DNS 端口 53 绑定失败, Captive Portal 不可用");
         close(sock); vTaskDelete(NULL); return;
     }
-    ESP_LOGI(TAG, "DNS 劫持已启动(端口 53)");
+    ESP_LOGI(TAG, "DNS 劫持已启动 (SoftAP: 192.168.4.1:53)");
     uint8_t buf[512];
     while (1) {
         struct sockaddr_in from;

@@ -117,6 +117,7 @@ esp_err_t wifi_manager_sta_connect(const char *ssid, const char *password)
 {
     save_cred(ssid, password);
     strncpy(s_connected_ssid, ssid, sizeof(s_connected_ssid) - 1);
+    s_sta_connected = false;
 
     wifi_config_t sta_cfg = {0};
     strncpy((char *)sta_cfg.sta.ssid, ssid, sizeof(sta_cfg.sta.ssid) - 1);
@@ -142,8 +143,17 @@ esp_err_t wifi_manager_sta_disconnect(void)
 esp_err_t wifi_manager_scan(char *result_buf, size_t buf_len)
 {
     uint16_t count = 0;
-    esp_wifi_scan_start(NULL, true);
-    esp_wifi_scan_get_ap_num(&count);
+    esp_err_t err = esp_wifi_scan_start(NULL, true);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "WiFi 扫描失败: %s", esp_err_to_name(err));
+        snprintf(result_buf, buf_len, "{\"ap_list\":[]}");
+        return err;
+    }
+    err = esp_wifi_scan_get_ap_num(&count);
+    if (err != ESP_OK) {
+        snprintf(result_buf, buf_len, "{\"ap_list\":[]}");
+        return err;
+    }
     if (count == 0) {
         snprintf(result_buf, buf_len, "{\"ap_list\":[]}");
         return ESP_OK;

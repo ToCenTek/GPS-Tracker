@@ -380,15 +380,15 @@ document.getElementById('w-pw-eye').addEventListener('click',function(){
 document.getElementById('w-con').addEventListener('click',function(){
   var s=document.getElementById('w-ss').value.trim(),p=document.getElementById('w-pw').value.trim();
   if(!s){toa('输入名称','warning');return;}
-  fetch('/wifi/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ssid:s,password:p})}).then(function(r){return r.json();}).then(function(d){if(d.ok)toa('已连','success');else toa('失败','danger');fWS();}).catch(function(){});});
+  fetch('/wifi/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ssid:s,password:p})}).then(function(r){return r.json();}).then(function(d){toa(d.ok?'连接中...':'失败','info');setTimeout(fWS,3000);}).catch(function(){});});
 document.getElementById('w-scan').addEventListener('click',function(){
   document.getElementById('w-sl').innerHTML='<p style="padding:12px;color:var(--ts)">扫描中...</p>';
   fetch('/wifi/scan').then(function(r){return r.json();}).then(function(d){
     var el=document.getElementById('w-sl');el.innerHTML='';
-    if(!d.ap_list||!d.ap_list.length){el.innerHTML='<p style="padding:12px;color:var(--ts)">无</p>';return;}
+    if(!d.ap_list||!d.ap_list.length){el.innerHTML='<p style="padding:12px;color:var(--ts)">未扫描到热点</p>';return;}
     d.ap_list.forEach(function(a){var x=document.createElement('div');x.style.cssText='display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--bg);border-radius:10px;margin-bottom:6px';
-      x.innerHTML='<div><div style="font-weight:600;font-size:14px">'+a.ssid+'</div><div style="font-size:11px;color:var(--ts)">信号:'+a.rssi+'dBm '+a.auth+'</div></div><button class="btn btn-xs btn-primary" onclick="document.getElementById(\'w-ss\').value=\''+a.ssid+'\';toa(\'已选\',\'info\')">选</button>';el.appendChild(x);});
-  }).catch(function(){document.getElementById('w-sl').innerHTML='<p style="padding:12px;color:var(--d)">失败</p>';});});
+      x.innerHTML='<div><div style="font-weight:600;font-size:14px">'+a.ssid+'</div><div style="font-size:11px;color:var(--ts)">信号:'+a.rssi+'dBm '+a.auth+'</div></div><button class="btn btn-xs btn-primary" onclick="document.getElementById(\'w-ss\').value=\''+a.ssid.replace(/'/g,"\\'")+'\';toa(\'已选\',\'info\')">选</button>';el.appendChild(x);});
+  }).catch(function(){document.getElementById('w-sl').innerHTML='<p style="padding:12px;color:var(--d)">扫描请求失败</p>';});});
 document.querySelector('[data-t="wif"]').addEventListener('click',fWS);
 setInterval(fWS,5000);fWS();
 
