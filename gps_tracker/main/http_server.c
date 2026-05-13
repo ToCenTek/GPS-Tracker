@@ -5,8 +5,6 @@
 #include "receiver_config.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
-#include "lwip/sockets.h"
-#include "lwip/inet.h"
 #include <string.h>
 #include <stdio.h>
 #include <cJSON.h>
@@ -260,59 +258,6 @@ static esp_err_t leaflet_css_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-/* 404 → 302 重定向 (Captive Portal) */
-static esp_err_t redirect_404_handler(httpd_req_t *req, httpd_err_code_t err)
-{
-    (void)err;
-    httpd_resp_set_status(req, "302 Found");
-    httpd_resp_set_hdr(req, "Location", "http://192.168.4.1/");
-    httpd_resp_send(req, NULL, 0);
-    return ESP_OK;
-}
-
-/* DNS 劫持: 仅监听 SoftAP IP (192.168.4.1), 避免与 STA DNS 冲突 */
-static void dns_task(void *arg)
-{
-    (void)arg;
-    int sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sock < 0) { ESP_LOGE(TAG, "DNS socket 失败"); vTaskDelete(NULL); return; }
-    struct sockaddr_in addr = { .sin_family = AF_INET, .sin_port = htons(53) };
-    addr.sin_addr.s_addr = inet_addr("192.168.4.1");
-    if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        ESP_LOGW(TAG, "DNS 端口 53 绑定失败, Captive Portal 不可用");
-        close(sock); vTaskDelete(NULL); return;
-    }
-    ESP_LOGI(TAG, "DNS 劫持已启动 (SoftAP: 192.168.4.1:53)");
-    uint8_t buf[512];
-    while (1) {
-        struct sockaddr_in from;
-        socklen_t fromlen = sizeof(from);
-        int len = recvfrom(sock, buf, sizeof(buf), 0, (struct sockaddr *)&from, &fromlen);
-        if (len < 12 || (buf[2] & 0x80)) continue;
-        uint16_t qcnt = (buf[4] << 8) | buf[5];
-        if (qcnt == 0) continue;
-        buf[2] = 0x81; buf[3] = 0x80;
-        buf[6] = (qcnt >> 8) & 0xFF; buf[7] = qcnt & 0xFF;
-        buf[8] = 0; buf[9] = 0; buf[10] = 0; buf[11] = 0;
-        int pos = 12;
-        for (int i = 0; i < qcnt; i++) {
-            if (pos >= len) break;
-            while (pos < len && buf[pos] != 0) { pos += buf[pos] + 1; }
-            pos += 5;
-        }
-        if (pos + 16 > (int)sizeof(buf)) continue;
-        buf[pos++] = 0xC0; buf[pos++] = 0x0C;
-        buf[pos++] = 0; buf[pos++] = 1;
-        buf[pos++] = 0; buf[pos++] = 1;
-        buf[pos++] = 0; buf[pos++] = 0; buf[pos++] = 0; buf[pos++] = 0x3C;
-        buf[pos++] = 0; buf[pos++] = 4;
-        buf[pos++] = 192; buf[pos++] = 168; buf[pos++] = 4; buf[pos++] = 1;
-        sendto(sock, buf, pos, 0, (struct sockaddr *)&from, fromlen);
-    }
-    close(sock);
-    vTaskDelete(NULL);
-}
-
 /* 注册路由 */
 static void register_handlers(httpd_handle_t server)
 {
@@ -360,9 +305,7 @@ esp_err_t http_server_init(void)
     esp_err_t err = httpd_start(&s_server, &config);
     if (err == ESP_OK) {
         register_handlers(s_server);
-        httpd_register_err_handler(s_server, HTTPD_404_NOT_FOUND, redirect_404_handler);
-        xTaskCreate(dns_task, "dns", 4096, NULL, 3, NULL);
-        ESP_LOGI(TAG, "HTTP服务器启动: 端口 80, Captive Portal 已启用");
+        ESP_LOGI(TAG, "HTTP服务器启动: 端口 80");
     } else {
         ESP_LOGE(TAG, "HTTP服务器启动失败: %s", esp_err_to_name(err));
     }
