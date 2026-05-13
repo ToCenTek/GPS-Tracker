@@ -26,7 +26,7 @@ static void build_gps_json(char *buf, size_t len)
     gps_data_t gps;
     gps_parser_get_latest(&gps);
 
-    /* 查询网格ID */
+    /* 查询网格ID (优先查多边形格子) */
     char grid_id[20] = "0";
     if (gps.status == 'A' && gps.latitude != 0) {
         grid_manager_query(gps.latitude, gps.longitude, grid_id, sizeof(grid_id));
@@ -38,35 +38,34 @@ static void build_gps_json(char *buf, size_t len)
     snprintf(lng_str, sizeof(lng_str), "%.6f %c", gps.longitude, gps.longitude_ew ? gps.longitude_ew : 'E');
     snprintf(mag_str, sizeof(mag_str), "%.1f %c", gps.magnetic_variation, gps.magnetic_variation_dir ? gps.magnetic_variation_dir : 'E');
 
+    char st = gps.mode ? gps.mode : (gps.status == 'A' ? 'A' : 'N');
     snprintf(buf, len,
-        "{"
-        "\"bj_time\":\"%s\","
-        "\"status\":\"%c\","
-        "\"latitude\":\"%s\","
-        "\"longitude\":\"%s\","
-        "\"speed_knots\":%.2f,"
-        "\"course\":%.1f,"
-        "\"date\":\"%s\","
-        "\"magnetic_variation\":\"%s\","
-        "\"mode\":\"%c\","
-        "\"altitude\":%.1f,"
-        "\"speed_kmh\":%.2f,"
-        "\"speed_ms\":%.2f,"
-        "\"satellites\":%d,"
-        "\"grid\":\"%s\""
+        "{\n"
+        "  \"bj_time\":\"%s\",\n"
+        "  \"status\":\"%c\",\n"
+        "  \"latitude\":\"%s\",\n"
+        "  \"longitude\":\"%s\",\n"
+        "  \"speed_knots\":%.2f,\n"
+        "  \"speed_kmh\":%.2f,\n"
+        "  \"speed_ms\":%.2f,\n"
+        "  \"course\":%.1f,\n"
+        "  \"date\":\"%s\",\n"
+        "  \"magnetic_variation\":\"%s\",\n"
+        "  \"altitude\":%.1f,\n"
+        "  \"satellites\":%d,\n"
+        "  \"grid\":\"%s\"\n"
         "}",
         gps.bj_time,
-        gps.status ? gps.status : 'V',
+        st,
         lat_str,
         lng_str,
         gps.speed_knots,
+        gps.speed_kmh,
+        gps.speed_ms,
         gps.course,
         gps.date,
         mag_str,
-        gps.mode ? gps.mode : 'N',
         gps.altitude,
-        gps.speed_kmh,
-        gps.speed_ms,
         gps.satellites,
         grid_id);
 }
@@ -78,6 +77,15 @@ static esp_err_t gps_json_handler(httpd_req_t *req)
     build_gps_json(buf, sizeof(buf));
     httpd_resp_set_type(req, "application/json; charset=utf-8");
     httpd_resp_send(req, buf, strlen(buf));
+    return ESP_OK;
+}
+
+/* GET /grid/data - 完整网格数据 (用于页面加载恢复) */
+static esp_err_t grid_data_handler(httpd_req_t *req)
+{
+    char *json = grid_manager_get_cells_json();
+    httpd_resp_set_type(req, "application/json; charset=utf-8");
+    httpd_resp_send(req, json, strlen(json));
     return ESP_OK;
 }
 
@@ -102,22 +110,15 @@ static esp_err_t grid_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-/* POST /grid - 创建网格 */
+/* POST /grid - 创建网格 (参数化) */
 static esp_err_t grid_post_handler(httpd_req_t *req)
 {
     char buf[4096];
     int ret = httpd_req_recv(req, buf, sizeof(buf) - 1);
-    if (ret <= 0) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "no data");
-        return ESP_FAIL;
-    }
+    if (ret <= 0) { httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "no data"); return ESP_FAIL; }
     buf[ret] = 0;
-
     cJSON *root = cJSON_Parse(buf);
-    if (!root) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid json");
-        return ESP_FAIL;
-    }
+    if (!root) { httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "invalid json"); return ESP_FAIL; }
     cJSON *size_item = cJSON_GetObjectItem(root, "grid_size");
     cJSON *poly_item = cJSON_GetObjectItem(root, "polygon");
     if (!size_item || !poly_item || !cJSON_IsArray(poly_item)) {
@@ -125,21 +126,21 @@ static esp_err_t grid_post_handler(httpd_req_t *req)
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "missing grid_size or polygon");
         return ESP_FAIL;
     }
-    double grid_size = size_item->valuedouble;
+    double sz = size_item->valuedouble;
+    double corners[4][2];
     int count = cJSON_GetArraySize(poly_item);
-    if (count > MAX_POLYGON_POINTS) count = MAX_POLYGON_POINTS;
-    double points[MAX_POLYGON_POINTS][2];
+    if (count > 4) count = 4;
     for (int i = 0; i < count; i++) {
         cJSON *pt = cJSON_GetArrayItem(poly_item, i);
         if (pt && cJSON_IsArray(pt) && cJSON_GetArraySize(pt) >= 2) {
-            points[i][0] = cJSON_GetArrayItem(pt, 1)->valuedouble; /* lat */
-            points[i][1] = cJSON_GetArrayItem(pt, 0)->valuedouble; /* lng */
+            corners[i][0] = cJSON_GetArrayItem(pt, 1)->valuedouble; /* lat */
+            corners[i][1] = cJSON_GetArrayItem(pt, 0)->valuedouble; /* lng */
         }
     }
-    grid_manager_set_polygon(points, count);
-    grid_manager_generate(grid_size);
+    /* 不足4个角则用第1个填充 */
+    for (int i = count; i < 4; i++) memcpy(corners[i], corners[0], 16);
+    grid_manager_generate(corners, sz);
     cJSON_Delete(root);
-
     char *json = grid_manager_get_json();
     httpd_resp_set_type(req, "application/json; charset=utf-8");
     httpd_resp_send(req, json, strlen(json));
@@ -233,11 +234,21 @@ static esp_err_t wifi_connect_handler(httpd_req_t *req)
     httpd_resp_send(req, "{\"ok\":true}", strlen("{\"ok\":true}"));
     return ESP_OK;
 }
+/* POST /wifi/disconnect */
+static esp_err_t wifi_disconnect_handler(httpd_req_t *req)
+{
+    wifi_manager_sta_disconnect();
+    httpd_resp_set_type(req, "application/json; charset=utf-8");
+    httpd_resp_send(req, "{\"ok\":true}", strlen("{\"ok\":true}"));
+    return ESP_OK;
+}
+
 /* 首页 */
 static esp_err_t index_handler(httpd_req_t *req)
 {
     ESP_LOGI(TAG, "GET /");
     httpd_resp_set_type(req, "text/html; charset=utf-8");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache, no-store, must-revalidate");
     httpd_resp_send(req, (const char *)index_html_start, index_html_end - index_html_start);
     return ESP_OK;
 }
@@ -272,6 +283,8 @@ static void register_handlers(httpd_handle_t server)
 
     httpd_uri_t uri_gps = {.uri = "/gps", .method = HTTP_GET, .handler = gps_json_handler};
     httpd_register_uri_handler(server, &uri_gps);
+    httpd_uri_t uri_gps_json = {.uri = "/gps.json", .method = HTTP_GET, .handler = gps_json_handler};
+    httpd_register_uri_handler(server, &uri_gps_json);
 
     httpd_uri_t uri_nmea = {.uri = "/nmea", .method = HTTP_GET, .handler = nmea_handler};
     httpd_register_uri_handler(server, &uri_nmea);
@@ -280,6 +293,8 @@ static void register_handlers(httpd_handle_t server)
     httpd_register_uri_handler(server, &uri_grid_post);
     httpd_uri_t uri_grid_get = {.uri = "/grid", .method = HTTP_GET, .handler = grid_get_handler};
     httpd_register_uri_handler(server, &uri_grid_get);
+    httpd_uri_t uri_grid_data = {.uri = "/grid/data", .method = HTTP_GET, .handler = grid_data_handler};
+    httpd_register_uri_handler(server, &uri_grid_data);
 
     httpd_uri_t uri_config = {.uri = "/config", .method = HTTP_POST, .handler = config_post_handler};
     httpd_register_uri_handler(server, &uri_config);
@@ -292,6 +307,9 @@ static void register_handlers(httpd_handle_t server)
 
     httpd_uri_t uri_wifi_con = {.uri = "/wifi/connect", .method = HTTP_POST, .handler = wifi_connect_handler};
     httpd_register_uri_handler(server, &uri_wifi_con);
+
+    httpd_uri_t uri_wifi_dis = {.uri = "/wifi/disconnect", .method = HTTP_POST, .handler = wifi_disconnect_handler};
+    httpd_register_uri_handler(server, &uri_wifi_dis);
 }
 
 esp_err_t http_server_init(void)

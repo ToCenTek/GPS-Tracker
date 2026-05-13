@@ -47,7 +47,7 @@ static const uint8_t font[95][6] = {
 #define I2C_ADDR 0x3C
 
 static void i2c_dly(void) {
-    for (volatile int i = 0; i < 30; i++); /* ~5us @ 240MHz */
+    for (volatile int i = 0; i < 120; i++); /* ~10us @ 240MHz */
 }
 #define SDA_L() gpio_set_level(PIN_SDA, 0)
 #define SDA_H() gpio_set_level(PIN_SDA, 1)
@@ -83,14 +83,17 @@ static int i2c_write(const uint8_t *data, size_t len) {
 
 static void fb_flush(void)
 {
-    if (!s_i2c_ok) return;
+    /* 设置窗口 */
     uint8_t addr[] = {0x00, 0x21, 0x00, 0x7F, 0x22, 0x00, 0x07};
     if (i2c_write(addr, sizeof(addr)) < 0) { s_i2c_ok = 0; return; }
-    /* 一次性发送 */
-    uint8_t tx[1025];
+    /* 分页发送 (每次128字节, 共8页) */
+    uint8_t tx[129];
     tx[0] = 0x40;
-    memcpy(tx + 1, s_fb, 1024);
-    i2c_write(tx, 1025);
+    for (int page = 0; page < 8; page++) {
+        memcpy(tx + 1, s_fb + page * 128, 128);
+        if (i2c_write(tx, 129) < 0) { s_i2c_ok = 0; return; }
+    }
+    s_i2c_ok = 1; /* 成功后恢复标记 */
 }
 
 /* ==================== 帧缓冲 ==================== */
@@ -161,30 +164,21 @@ static void utc_to_bj(const char *utc, const char *date, char *out, size_t len)
 }
 
 /* ==================== TCT商标绘制 ==================== */
-static void draw_tct_logo(void)
+static void draw_splash(void)
 {
-    int pad = 4; /* 白底边距 = 4px (T距顶4px) */
+    fb_clr();
+    int pad = 4;
     int B = 10;
     int tw = B * 3;
     int t1x = 14, cx = 54, t2x = 84, sy = pad;
-
-    /* 紧贴内容的白底: x从t1x-pad到t2x+tw+pad, y从0到subtitle底+pad */
-    /* subtitle: y=40~48, T blocks: y=4~34, 整体 y=4~48 */
-    /* 白底: x=10,y=0,w=108,h=52 */
     fb_rect(10, 0, 108, 52, 1);
-
-    /* T (白底上画黑色) */
     fb_rect(t1x, sy, tw, B, 0);
     fb_rect(t1x + B, sy + B, B, B*2, 0);
-    /* C */
     fb_rect(cx + B, sy, B, B, 0);
     fb_rect(cx, sy + B, B, B, 0);
     fb_rect(cx + B, sy + B*2, B, B, 0);
-    /* T */
     fb_rect(t2x, sy, tw, B, 0);
     fb_rect(t2x + B, sy + B, B, B*2, 0);
-
-    /* 下标 */
     fb_str(19, 40, "TCT GPS TRACKER", 0);
 }
 
@@ -209,13 +203,18 @@ esp_err_t oled_init(void)
         {0x8D,0x14},{0x20,0x00},{0xA1},{0xC8},{0xDA,0x12},
         {0x81,0xCF},{0xD9,0xF1},{0xDB,0x40},{0xA4},{0xA6},{0xAF}
     };
-    for (int i = 0; i < 16; i++) {
+    /* 先发除0xAF外的所有初始化命令 */
+    for (int i = 0; i < 15; i++) {
         uint8_t tx[8]; tx[0] = 0x00;
         memcpy(tx + 1, cmds[i], sizeof(cmds[i]));
         if (i2c_write(tx, sizeof(cmds[i]) + 1) < 0) { s_i2c_ok = 0; return ESP_OK; }
         vTaskDelay(pdMS_TO_TICKS(2));
     }
-    draw_tct_logo();
+    /* 清屏后再开显示, 避免GDDRAM上电随机值显示乱码 */
+    fb_clr(); fb_flush();
+    uint8_t on[] = {0x00, 0xAF};
+    i2c_write(on, 2);
+    draw_splash();
     fb_flush();
     s_boot_ms = (uint32_t)(esp_timer_get_time() / 1000);
     ESP_LOGI(TAG, "OLED初始化完成");
@@ -225,15 +224,13 @@ esp_err_t oled_init(void)
 /* ==================== 冷启动/正常运行(统一入口) ==================== */
 void oled_coldstart(void)
 {
-    if (!s_i2c_ok) return;
-
     uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
     uint32_t elapsed = now_ms - s_boot_ms;
     int total_s = elapsed / 1000;
 
     if (elapsed < 30000) {
         /* 前30秒: TCT商标 + 冷启动倒计时 */
-        draw_tct_logo();
+        draw_splash();
         int sec = 30 - total_s;
         if (sec < 0) sec = 0;
         char w[24];
@@ -276,7 +273,7 @@ void oled_coldstart(void)
     fb_str(0, 44, "N39.9042  E116.4074", 1);
 
     /* 第6行 y=56: 速度(节+km/h) 海拔 */
-    fb_str(0, 56, "12.5kn  23kmh  50m", 1);
+    fb_str(0, 56, "23kmh  50m", 1);
 
     fb_flush();
 }
@@ -284,14 +281,12 @@ void oled_coldstart(void)
 /* ==================== 统一更新接口 ==================== */
 void oled_update(const gps_data_t *gps, const char *grid_id, const char *wifi_mode)
 {
-    if (!s_i2c_ok) return;
-
     uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
     uint32_t elapsed = now_ms - s_boot_ms;
 
     if (elapsed < 30000) {
         /* 前30秒: TCT商标 + 冷启动倒计时 */
-        draw_tct_logo();
+        draw_splash();
         int sec = 30 - (int)(elapsed / 1000);
         if (sec < 0) sec = 0;
         char w[24];
@@ -305,32 +300,27 @@ void oled_update(const gps_data_t *gps, const char *grid_id, const char *wifi_mo
     fb_clr();
     char buf[28];
 
-    /* 第1行 y=0: IP(动态STA/AP)    S/A  卫星数 */
+    /* 第1行: WiFi IP(变长)        定位模式 卫星数(固定位) */
     const char *sta_ip = wifi_manager_get_sta_ip();
     int sta_ok = wifi_manager_is_sta_connected() && sta_ip && strcmp(sta_ip, "0.0.0.0") != 0;
-    if (sta_ok) {
-        snprintf(buf, sizeof(buf), "%s", sta_ip);
-        fb_str(0, 0, buf, 1);
-        fb_str(98, 0, "S", 1);
-    } else {
-        fb_str(0, 0, "192.168.4.1", 1);
-        fb_str(98, 0, "A", 1);
-    }
+    fb_str(0, 0, sta_ok ? "S" : "A", 1);
+    fb_str(12, 0, sta_ok ? sta_ip : "192.168.4.1", 1);
+    char gm = gps ? gps->mode : 0;
+    if (!gm) gm = (gps && gps->status == 'A') ? 'A' : 'N';
+    buf[0] = gm; buf[1] = 0;
+    fb_str(102, 0, buf, 1);
     snprintf(buf, sizeof(buf), "%02d", gps ? gps->satellites : 0);
     fb_str(116, 0, buf, 1);
 
-    /* 第2行 y=12: 北京时间 */
+    /* 第2行 y=12: 年月日 时分秒 */
     if (gps && strlen(gps->bj_time) > 0) {
-        char t[9];
-        strncpy(t, gps->bj_time, 8); t[8] = 0;
-        int h, m, s_val;
-        if (sscanf(t, "%2d%2d%2d", &h, &m, &s_val) == 3) {
-            snprintf(buf, sizeof(buf), "%02d:%02d:%02d", h, m, s_val);
-        } else {
-            snprintf(buf, sizeof(buf), "%s", gps->bj_time);
-        }
+        int h, m, s, d=0, mo=0, y=0;
+        char t[16];
+        sscanf(gps->bj_time, "%2d%2d%2d", &h, &m, &s);
+        if (strlen(gps->date) >= 6) sscanf(gps->date, "%2d%2d%2d", &d, &mo, &y);
+        snprintf(buf, sizeof(buf), "%02d-%02d-%02d %02d:%02d:%02d", y+2000, mo, d, h, m, s);
     } else {
-        snprintf(buf, sizeof(buf), "--:--:--");
+        snprintf(buf, sizeof(buf), "----/--/-- --:--:--");
     }
     fb_str(0, 12, buf, 1);
 
@@ -345,7 +335,7 @@ void oled_update(const gps_data_t *gps, const char *grid_id, const char *wifi_mo
     if (gps && gps->status == 'A' && gps->latitude != 0) {
         char lat_c = gps->latitude >= 0 ? 'N' : 'S';
         char lng_c = gps->longitude >= 0 ? 'E' : 'W';
-        snprintf(buf, sizeof(buf), "%c%.4f %c%.4f", lat_c, fabs(gps->latitude), lng_c, fabs(gps->longitude));
+        snprintf(buf, sizeof(buf), "%.6f  %.6f", fabs(gps->latitude), fabs(gps->longitude));
     } else {
         snprintf(buf, sizeof(buf), "NO FIX");
     }
@@ -353,9 +343,9 @@ void oled_update(const gps_data_t *gps, const char *grid_id, const char *wifi_mo
 
     /* 第6行 y=56: 速度 + 海拔 */
     if (gps && gps->status == 'A') {
-        snprintf(buf, sizeof(buf), "%.1fkn %.1fkmh %.0fm", gps->speed_knots, gps->speed_kmh, gps->altitude);
+        snprintf(buf, sizeof(buf), "%.1fkmh %.0fm", gps->speed_kmh, gps->altitude);
     } else {
-        snprintf(buf, sizeof(buf), "--kn --kmh --m");
+        snprintf(buf, sizeof(buf), "--kmh --m");
     }
     fb_str(0, 56, buf, 1);
 

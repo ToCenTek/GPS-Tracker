@@ -181,13 +181,20 @@ GPS/
 - 网格持久化（NVS，含区域多边形 + 格子）
 - Kconfig 密码配置（`menuconfig` → GPS Tracker Configuration）
 
-### 🔴 GPS 定位 TODO（下个会话）
+### 🔴 待办（下个会话）
 - [ ] 实地测试：带 ESP32 出门走动，验证地图自动跟随 + 航向箭头
 - [ ] 验证轨迹记录 + 从轨迹生成区域 + 网格划分完整流程
 - [ ] 验证网格落点查询（`/gps` 返回 `grid` 字段）
 - [ ] 验证 OLED 显示真实 GPS 数据（经纬度/速度/海拔/卫星数）
 - [ ] 验证 NMEA 语句原始输出（`/nmea` 实时框）
 - [ ] 长期稳定性测试（连续运行是否崩溃/内存泄漏）
+
+### ✅ 代码修复（2026-05-13）
+- [x] 修复 JS 端 URL 错误: `fetch('/gps.json')` → `fetch('/gps')`（导致 404）
+- [x] 修复 JS 字段名不匹配: `speed_kilometers_per_hour` → `speed_kmh`, `utc_time` → `bj_time`
+- [x] 修复 JS 端经纬度字符串与数字类型混用（之前 `lat` 是 `"30.294300 N"` 字符串，无法参与数值运算）
+- [x] C 端 `/gps` JSON 增加 `lat` / `lng` 数字字段供前端直接使用
+- [x] 新增 C 端 `/wifi/disconnect` POST 端点（前端断开按钮之前不可用）
 
 ### ⚠️ 已知问题
 - Captive Portal（强制门户）已放弃：DNS socket 耗尽 lwIP socket 池导致 HTTP 服务崩溃

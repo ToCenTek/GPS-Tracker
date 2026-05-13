@@ -47,6 +47,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .nmea-btns .btn-xs{width:52px;padding:4px 0;font-size:11px;text-align:center;justify-content:center}
 .nmea-btns .btn-xs.active{background:var(--p);color:#fff;border-color:var(--p)}
 #c-msg-out{flex:1;font-family:monospace;font-size:11px;padding:8px;border:1.5px solid var(--b);border-radius:8px;outline:none;background:var(--bg);color:var(--ts);resize:none}
+.grid-label{background:transparent!important;border:none!important;box-shadow:none!important;font-weight:700;color:#3c78c8;text-shadow:0 0 3px #fff;font-size:12px}
+.grid-label:before,.grid-label:after{display:none!important}
+.leaflet-marker-icon{z-index:9999!important}
 
 </style>
 </head>
@@ -57,8 +60,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
   <div class="si">🛰 <span class="v" id="sat-n">0</span></div>
   <div class="si">📦 <span class="v" id="gid-n">0</span></div>
   <button class="tb-btn" id="btn-center" style="margin:0 auto;width:36px;height:36px;padding:0;border:none;border-radius:8px;background:transparent;color:var(--ts);font-size:20px;cursor:pointer;line-height:1" title="回位置">📍</button>
+  <button class="tb-btn" id="btn-north" title="航向指北" style="font-size:14px;font-weight:700">N↑</button>
   <span style="font-size:12px;padding:2px 8px;border-radius:12px;background:#e8f0fe;color:var(--p);font-weight:600" id="wfb">SoftAP</span>
   <div class="si">📍 <span class="v" id="gps-ll">--</span></div>
+  <span style="display:none;font-size:12px;font-weight:700;color:var(--d)" id="rec-ind">●录制中</span>
 </div>
 <canvas id="cv"></canvas>
 <div id="map"></div>
@@ -131,7 +136,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 // ===== 先注册Toast和面板(确保按钮可用) =====
 function toa(m,t){var e=document.getElementById('toast');if(!e)return;e.textContent=m;e.className=(t||'info')+' show';clearTimeout(e._h);e._h=setTimeout(function(){e.classList.remove('show');},3000);}
 var pnl=document.getElementById('bp'),pnlm=true;
-if(pnl){document.getElementById('bh').addEventListener('click',function(){pnlm=!pnlm;pnl.classList.toggle('min',pnlm);});}
+if(pnl){document.getElementById('bh').addEventListener('click',function(){pnlm=!pnlm;pnl.classList.toggle('min',pnlm);
+  var bp=document.getElementById('map').style;if(pnlm){bp.bottom='0px';}else{bp.bottom=pnl.offsetHeight+'px';}
+  if(lmap)setTimeout(function(){lmap.invalidateSize();},350);if(!lmap){setTimeout(function(){sz();},350);}});}
 function closePnl(){if(!pnlm){pnlm=true;pnl.classList.add('min');}}
 document.getElementById('map').addEventListener('click',closePnl);
 document.getElementById('cv').addEventListener('click',closePnl);
@@ -141,15 +148,26 @@ document.querySelectorAll('#bt .tab').forEach(function(b){b.addEventListener('cl
   b.classList.add('act');document.getElementById('tp-'+b.dataset.t).classList.add('act');
   if(pnlm){pnlm=false;pnl.classList.remove('min');}});});
 
+// ===== WGS84 → GCJ-02 坐标转换 (高德/腾讯地图偏移校正) =====
+var gcj_pi=3.1415926535897932384626,gcj_a=6378245,gcj_ee=0.00669342162296594323;
+function gcj_transformLat(x,y){var t=-100+2*x+3*y+.2*y*y+.1*x*y+.2*Math.sqrt(Math.abs(x));t+=(20*Math.sin(6*x*gcj_pi)+20*Math.sin(2*x*gcj_pi))*2/3;t+=(20*Math.sin(y*gcj_pi)+40*Math.sin(y/3*gcj_pi))*2/3;t+=(160*Math.sin(y/12*gcj_pi)+320*Math.sin(y*gcj_pi/30))*2/3;return t;}
+function gcj_transformLng(x,y){var t=300+x+2*y+.1*x*x+.1*x*y+.1*Math.sqrt(Math.abs(x));t+=(20*Math.sin(6*x*gcj_pi)+20*Math.sin(2*x*gcj_pi))*2/3;t+=(20*Math.sin(x*gcj_pi)+40*Math.sin(x/3*gcj_pi))*2/3;t+=(150*Math.sin(x/12*gcj_pi)+300*Math.sin(x/30*gcj_pi))*2/3;return t;}
+function wgs84_to_gcj02(lat,lng){
+  var dlat=gcj_transformLat(lng-105,lat-35),dlng=gcj_transformLng(lng-105,lat-35);
+  var rlat=lat/180*gcj_pi,m=Math.sin(rlat);m=1-gcj_ee*m*m;var s=Math.sqrt(m);
+  dlat=dlat*180/((gcj_a*(1-gcj_ee))/(m*s)*gcj_pi);
+  dlng=dlng*180/(gcj_a/s*Math.cos(rlat)*gcj_pi);
+  return {lat:lat+dlat,lng:lng+dlng};
+}
 // ===== Canvas坐标格网 =====
-var lmap, follow=true;
+var lmap, follow=true, headingUp=false;
 try {
 var cv=document.getElementById('cv'),ctx=cv.getContext('2d'),W=0,H=0;
 function sz(){W=cv.width=cv.clientWidth;H=cv.height=cv.clientHeight;try{dr();}catch(e){}}
 window.addEventListener('resize',sz);sz();
 
 var cL=30.2943,cG=120.1663,MPD=111320,zoom=0;
-var gps={la:cL,lg:cG,v:false,course:0},trk=[],reg=[],isT=false,cel=[];
+var gps={la:cL,lg:cG,v:false,course:0,scourse:0,speed:0},trk=[],postTrk=[],reg=[],cel=[];
 var drag=false,dx=0,dy=0;
 
 // 拖拽/缩放
@@ -211,8 +229,9 @@ function dr(){
   }
   // 轨迹
   if(trk.length>1){ctx.beginPath();v=px(trk[0]);ctx.moveTo(v.x,v.y);for(var i=1;i<trk.length;i++){v=px(trk[i]);ctx.lineTo(v.x,v.y);}ctx.strokeStyle='#1a73e8';ctx.lineWidth=3;ctx.stroke();}
-  // GPS标记(蓝色箭头)
-  if(gps.v&&gps.la){v=px([gps.la,gps.lg]);var a=gps.course*Math.PI/180;
+  if(postTrk.length>1){ctx.beginPath();v=px(postTrk[0]);ctx.moveTo(v.x,v.y);for(var i=1;i<postTrk.length;i++){v=px(postTrk[i]);ctx.lineTo(v.x,v.y);}ctx.strokeStyle='#999';ctx.lineWidth=2;ctx.setLineDash([8,6]);ctx.stroke();ctx.setLineDash([]);}
+  // GPS航向箭头 (画布箭头默认指向右侧, 减90°对齐北; 航向平滑插值)
+  if(gps.v&&gps.la){var d=gps.course-gps.scourse;if(d>180)d-=360;if(d<-180)d+=360;gps.scourse+=d*0.15;v=px([gps.la,gps.lg]);var a=headingUp?-Math.PI/2:gps.scourse*Math.PI/180-Math.PI/2;
     ctx.save();ctx.translate(v.x,v.y);ctx.rotate(a);
     ctx.beginPath();ctx.moveTo(12,0);ctx.lineTo(-8,-7);ctx.lineTo(-4,0);ctx.lineTo(-8,7);ctx.closePath();
     ctx.fillStyle='#1a73e8';ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
@@ -237,72 +256,133 @@ function px(p){return{x:W/2+(p[1]-cG)*MPD*Math.cos(cL*Math.PI/180)*Math.pow(2,zo
 } catch(e) {}
 
 // ===== 按钮事件 =====
-document.getElementById('btn-center').addEventListener('click',function(){if(gps.v){cL=gps.la;cG=gps.lg;dr();}});
+function centerGPS(){if(!gps.v)return;var gcj=wgs84_to_gcj02(gps.la,gps.lg);if(leafGps){leafGps.setLatLng([gcj.lat,gcj.lng]);var e=leafGps.getElement();if(e){var s=e.querySelector('span');if(s)s.style.transform=headingUp?'rotate(0deg)':'rotate('+gps.course+'deg)';}}if(lmap){lmap.setView([gcj.lat,gcj.lng],Math.max(lmap.getZoom(),16),{animate:false});var sf2=Math.min((gps.speed||0)/30,1);if(sf2>0.01)lmap.panBy([0,sf2*0.25*lmap.getSize().y],{animate:false});follow=true;}else{cL=gps.la;cG=gps.lg;dr();}}
+document.getElementById('btn-center').addEventListener('click',centerGPS);
+document.getElementById('btn-north').addEventListener('click',function(){headingUp=!headingUp;this.textContent=headingUp?'H↑':'N↑';this.classList.toggle('act',headingUp);});
 
-document.getElementById('trk-s').addEventListener('click',function(){isT=true;trk=[];toa('开始','success');});
-document.getElementById('trk-p').addEventListener('click',function(){isT=false;toa('已停','info');});
-document.getElementById('trk-c').addEventListener('click',function(){isT=false;trk=[];dr();document.getElementById('trk-i').textContent='轨迹:0';toa('清除','info');});
+var stRec='idle';
+function recShow(){
+  document.getElementById('rec-ind').style.display=stRec!='idle'?'inline':'none';
+  document.getElementById('rec-ind').textContent=stRec=='rec'?'●录制中':'⏸已暂停';
+  document.getElementById('rec-ind').style.color=stRec=='rec'?'var(--d)':'var(--w)';
+  document.getElementById('trk-s').textContent=stRec=='rec'?'⏸暂停':'▶开始';
+  document.getElementById('trk-s').className=stRec=='rec'?'btn btn-warning':'btn btn-success';
+  document.getElementById('trk-i').textContent='轨迹:'+trk.length;
+}
+document.getElementById('trk-s').addEventListener('click',function(){
+  if(stRec=='rec'){stRec='paused';recShow();toa('已暂停','info');}
+  else{stRec='rec';if(!trk.length&&leafTrack)leafTrack.setLatLngs([]);recShow();toa('录制中','success');}
+});
+document.getElementById('trk-p').addEventListener('click',function(){stRec='idle';trk=[];if(leafTrack)leafTrack.setLatLngs([]);dr();document.getElementById('trk-i').textContent='轨迹:0';recShow();toa('清除','info');});
+document.getElementById('trk-c').addEventListener('click',function(){stRec='idle';trk=[];if(leafTrack)leafTrack.setLatLngs([]);dr();document.getElementById('trk-i').textContent='轨迹:0';recShow();toa('清除','info');});
 
+var leafReg=null,leafGrid=null;
 document.getElementById('g-reg').addEventListener('click',function(){
   if(trk.length<3){toa('需≥3轨迹点','warning');return;}
-  reg=trk.slice();reg.push(reg[0]);
-  document.getElementById('g-pts').textContent='区域点:'+reg.length;dr();
+  var mLat=Infinity,xLat=-Infinity,mLng=Infinity,xLng=-Infinity;
+  trk.forEach(function(p){mLat=Math.min(mLat,p[0]);xLat=Math.max(xLat,p[0]);mLng=Math.min(mLng,p[1]);xLng=Math.max(xLng,p[1]);});
+  reg=[[mLat,mLng],[mLat,xLng],[xLat,xLng],[xLat,mLng]];
+  document.getElementById('g-pts').textContent='区域:'+reg.length+'点';dr();
+  if(lmap){if(leafReg)lmap.removeLayer(leafReg);var a=wgs84_to_gcj02(mLat,mLng),b=wgs84_to_gcj02(xLat,xLng);leafReg=L.rectangle([[a.lat,a.lng],[b.lat,b.lng]],{color:'#f59e0b',weight:2,fillOpacity:.12}).addTo(lmap);}
   var sz=parseInt(document.getElementById('g-sz').value)||2;
-  var b=[Infinity,-Infinity,Infinity,-Infinity];reg.forEach(function(p){b[0]=Math.min(b[0],p[0]);b[1]=Math.max(b[1],p[0]);b[2]=Math.min(b[2],p[1]);b[3]=Math.max(b[3],p[1]);});
-  cols=Math.ceil((b[3]-b[2])*MPD*Math.cos((b[0]+b[1])/2*Math.PI/180)/sz);rows=Math.ceil((b[1]-b[0])*MPD/sz);
+  var mc=Math.cos((mLat+xLat)/2*Math.PI/180);
+  var cols=Math.ceil((xLng-mLng)*111320*mc/sz),rows=Math.ceil((xLat-mLat)*111320/sz);
   document.getElementById('g-tot').value=(cols>0&&rows>0)?(cols*rows):'--';toa('区域已生成','success');});
-document.getElementById('g-clr').addEventListener('click',function(){reg=[];document.getElementById('g-pts').textContent='区域点:0';dr();});
+document.getElementById('g-clr').addEventListener('click',function(){reg=[];if(leafReg){lmap.removeLayer(leafReg);leafReg=null;}document.getElementById('g-pts').textContent='区域点:0';dr();});
 
 document.getElementById('g-gen').addEventListener('click',function(){
-  if(reg.length<3){toa('先区域','warning');return;}
+  if(reg.length<4){toa('先区域','warning');return;}
   var sz=parseInt(document.getElementById('g-sz').value);
   if(isNaN(sz)||sz<2||sz>40075000){toa('边长2~40075000','warning');return;}
-  fetch('/grid',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({grid_size:sz,polygon:reg.slice(0,-1).map(function(p){return[p[1],p[0]];})})})
+  fetch('/grid',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({grid_size:sz,polygon:[[reg[0][1],reg[0][0]],[reg[1][1],reg[1][0]],[reg[2][1],reg[2][0]],[reg[3][1],reg[3][0]]]})})
   .then(function(r){return r.json();}).then(function(d){
-    if(d.grids){cel=d.grids.slice(0,500);document.getElementById('g-tot').value=d.total_grids||cel.length;toa('已生成','success');dr();}
-  }).catch(function(){toa('失败','danger');});});
-document.getElementById('g-del').addEventListener('click',function(){cel=[];document.getElementById('tb-gid').textContent='📦 0';toa('清除','info');dr();});
+    if(d.grids){cel=d.grids.slice(0,500);document.getElementById('g-tot').value=d.total_grids||cel.length;toa('已生成','success');dr();
+      if(lmap){if(leafGrid)lmap.removeLayer(leafGrid);leafGrid=L.featureGroup().addTo(lmap);
+        cel.forEach(function(c){
+          var sw=wgs84_to_gcj02(c.bounds[0][1],c.bounds[0][0]),ne=wgs84_to_gcj02(c.bounds[1][1],c.bounds[1][0]);
+          var r=L.rectangle([[sw.lat,sw.lng],[ne.lat,ne.lng]],{color:'#3c78c8',weight:.8,fillOpacity:0});
+          r.bindTooltip(c.id,{permanent:true,direction:'center',sticky:false,className:'grid-label'});
+          var z=lmap.getZoom();if(z<15)r.closeTooltip();else r.openTooltip();
+          leafGrid.addLayer(r);});
+        lmap.on('zoomend',function(){leafGrid.eachLayer(function(l){if(lmap.getZoom()<15)l.closeTooltip();else l.openTooltip();});});}
 
-// ===== 页面加载时读取 /grid 获取当前信息 =====
+  fetch('/grid/data').then(function(r){return r.json();}).then(function(d){
+    if(d.grids&&d.grids.length){cel=d.grids.slice(0,500);
+      if(lmap){leafGrid=L.featureGroup().addTo(lmap);
+        cel.forEach(function(c){
+          var sw=wgs84_to_gcj02(c.bounds[0][1],c.bounds[0][0]),ne=wgs84_to_gcj02(c.bounds[1][1],c.bounds[1][0]);
+          var r=L.rectangle([[sw.lat,sw.lng],[ne.lat,ne.lng]],{color:'#3c78c8',weight:.8,fillOpacity:0});
+          r.bindTooltip(c.id,{permanent:true,direction:'center',sticky:false,className:'grid-label'});
+          leafGrid.addLayer(r);});
+        lmap.on('zoomend',function(){leafGrid.eachLayer(function(l){if(lmap.getZoom()<15)l.closeTooltip();else l.openTooltip();});});}}
+  }).catch(function(){toa('失败','danger');});});
+document.getElementById('g-del').addEventListener('click',function(){cel=[];if(leafGrid){lmap.removeLayer(leafGrid);leafGrid=null;}document.getElementById('tb-gid').textContent='📦 0';toa('清除','info');dr();});
+
+// ===== 页面加载时读取网格数据 =====
 fetch('/grid').then(function(r){return r.json();}).then(function(d){
-  // 更新grid显示 格式与/gps一致
   document.getElementById('tb-gid').textContent='📦 '+(d.grid||'0');
+}).catch(function(){});
+fetch('/grid/data').then(function(r){return r.json();}).then(function(d){
+  if(d.grids&&d.grids.length){cel=d.grids.slice(0,500);
+    if(lmap){leafGrid=L.featureGroup().addTo(lmap);
+      cel.forEach(function(c){
+        var sw=wgs84_to_gcj02(c.bounds[0][1],c.bounds[0][0]),ne=wgs84_to_gcj02(c.bounds[1][1],c.bounds[1][0]);
+        var r=L.rectangle([[sw.lat,sw.lng],[ne.lat,ne.lng]],{color:'#3c78c8',weight:.8,fillOpacity:0});
+        r.bindTooltip(c.id,{permanent:true,direction:'center',sticky:false});
+        leafGrid.addLayer(r);});
+      lmap.on('zoomend',function(){leafGrid.eachLayer(function(l){if(lmap.getZoom()<15)l.closeTooltip();else l.openTooltip();});});}}
+  dr();
 }).catch(function(){});
 
 // ===== GPS =====
 function fGPS(){fetch('/gps').then(function(r){return r.json();}).then(function(d){
-  gps.v=d.status==='A'&&parseFloat(d.latitude)!==0;
-  if(gps.v){gps.la=parseFloat(d.latitude);gps.lg=parseFloat(d.longitude);gps.course=d.course;}
-  document.getElementById('gps-dot').className='dot '+(gps.v?'dg':'dr');
-  document.getElementById('gps-st').textContent=gps.v?'定位':'等待';
+  try{
+  var f=(d.status=='A'||d.status=='D'||d.status=='E'||d.status=='M')&&parseFloat(d.latitude)!==0;
+  gps.v=f;if(f){gps.la=parseFloat(d.latitude);gps.lg=parseFloat(d.longitude);gps.course=d.course;gps.speed=d.speed_kmh||0;}
+  document.getElementById('gps-st').textContent=(f?'定位':'等待')+' f:'+f+' v:'+gps.v+' r:'+stRec;
+  if(gps.v&&stRec=='rec'){trk.push([gps.la,gps.lg]);if(leafTrack)leafTrack.setLatLngs(trk.map(function(p){var g=wgs84_to_gcj02(p[0],p[1]);return [g.lat,g.lng];}));}
+  document.getElementById('trk-i').textContent='轨迹:'+trk.length;
+  document.getElementById('gps-dot').className='dot '+(f?'dg':'dr');
+  document.getElementById('gps-st').textContent=f?'定位':'等待';
   document.getElementById('sat-n').textContent=d.satellites||0;
   document.getElementById('gid-n').textContent=d.grid||'0';
-  document.getElementById('gps-ll').textContent=gps.v?d.latitude+','+d.longitude:'--';
-  document.getElementById('p-bj').textContent=d.bj_time||'--';
-  document.getElementById('p-st').textContent=gps.v?'有效':'无效';
-  document.getElementById('p-la').textContent=gps.v?d.latitude:'--';
-  document.getElementById('p-lo').textContent=gps.v?d.longitude:'--';
-  document.getElementById('p-sk').textContent=gps.v?(d.speed_knots||0).toFixed(2):'--';
-  document.getElementById('p-cr').innerHTML=gps.v?((gps.course||0).toFixed(1)+' <span class="u">°</span>'):'--';
+  document.getElementById('gps-ll').textContent=f?d.latitude+','+d.longitude:'--';
+  function ftm(t){return t&&t.length>=6?t.substr(0,2)+':'+t.substr(2,2)+':'+t.substr(4,2):'--';}
+  function fdt(d){return d&&d.length>=6?'20'+d.substr(4,2)+'-'+d.substr(2,2)+'-'+d.substr(0,2):'--';}
+  document.getElementById('p-bj').textContent=ftm(d.bj_time);
+  document.getElementById('p-da').textContent=fdt(d.date)+' '+ftm(d.bj_time);
+  document.getElementById('p-st').textContent=f?'有效':'无效';
+  document.getElementById('p-la').textContent=f?d.latitude:'--';
+  document.getElementById('p-lo').textContent=f?d.longitude:'--';
+  document.getElementById('p-sk').textContent=f?(d.speed_knots||0).toFixed(2):'--';
+  document.getElementById('p-cr').innerHTML=f?((d.course||0).toFixed(1)+' <span class="u">°</span>'):'--';
   document.getElementById('p-da').textContent=d.date||'--';
   document.getElementById('p-mv').innerHTML=(d.magnetic_variation||'--')+' <span class="u">°</span>';
-  document.getElementById('p-mod').textContent=gps.v?d.mode:'--';
-  document.getElementById('p-al').innerHTML=gps.v?((d.altitude||0).toFixed(1)+' <span class="u">m</span>'):'--';
-  document.getElementById('p-skm').textContent=gps.v?(d.speed_kmh||0).toFixed(2):'--';
-  document.getElementById('p-smh').textContent=gps.v?(d.speed_ms||0).toFixed(2):'--';
+  document.getElementById('p-mod').textContent=f?(d.status+(d.status=='A'?'自主':d.status=='D'?'差分':d.status=='E'?'估算':d.status=='M'?'手动':d.status=='S'?'模拟':'无效')):'--';
+  document.getElementById('p-al').innerHTML=f?((d.altitude||0).toFixed(1)+' <span class="u">m</span>'):'--';
+  document.getElementById('p-skm').textContent=f?(d.speed_kmh||0).toFixed(2):'--';
+  document.getElementById('p-smh').textContent=f?(d.speed_ms||0).toFixed(2):'--';
   document.getElementById('p-sat').textContent=d.satellites||0;
   document.getElementById('p-gid').textContent=d.grid||'0';
   document.getElementById('tb-gid').textContent='📦 '+(d.grid||'0');
-  if(gps.v&&isT){trk.push([gps.la,gps.lg]);document.getElementById('trk-i').textContent='轨迹:'+trk.length;}
-  if(leafGps&&gps.v){leafGps.setLatLng([gps.la,gps.lg]);if(isT)leafTrack.addLatLng([gps.la,gps.lg]);
-    // 旋转航向箭头
-    var el=leafGps.getElement();if(el){var d=el.querySelector('div');if(d)d.style.transform='rotate('+gps.course+'deg)';}
-    // 自动跟随 (首次zoom到18级, 之后保持当前级别)
-    if(follow){var z=lmap.getZoom();if(z<16)z=18;lmap.setView([gps.la,gps.lg],z);}}
-  // Canvas 首次定位居中 (zoom=0表示未居中过)
-  if(!online&&gps.v&&zoom===0){cL=gps.la;cG=gps.lg;zoom=2;}
-  dr();}).catch(function(){});}
-setInterval(fGPS,1000);fGPS();
+  if(gps.v&&stRec=='rec'){
+    trk.push([gps.la,gps.lg]);postTrk=[];
+    if(leafTrack)leafTrack.setLatLngs(trk.map(function(p){var g=wgs84_to_gcj02(p[0],p[1]);return [g.lat,g.lng];}));
+  }else if(gps.v){
+    postTrk.push([gps.la,gps.lg]);
+    if(leafPostTrack)leafPostTrack.setLatLngs(postTrk.map(function(p){var g=wgs84_to_gcj02(p[0],p[1]);return [g.lat,g.lng];}));
+  }
+  centerGPS();
+  // Canvas 跟随
+  if(!online&&f){
+    var mpd=MPD*Math.pow(2,zoom||2);
+    var s2=Math.min(gps.speed/30,1);
+    cL+=(gps.la+s2*0.25*H/mpd-cL)*0.12;cG+=(gps.lg-cG)*0.12;
+    if(zoom<2)zoom=2;}
+  dr();}catch(e){}}).catch(function(){}).then(function(){setTimeout(fGPS,1000);});}
+fGPS();
+// 独立轮询: 检测到GPS定位后自动居中 (不依赖fGPS的调用链)
+setInterval(function(){if(gps.v&&lmap)centerGPS();},500);
 
 // ===== 原始NMEA =====
 function fNMEA(){fetch('/nmea').then(function(r){return r.json();}).then(function(d){
@@ -326,15 +406,18 @@ var online=false;
 function initLeaflet(){
   try{
     if(typeof L==='undefined')throw'No Leaflet';
-    lmap=L.map('map',{center:[30.2943,120.1663],zoom:16,maxZoom:20});
-    L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',{subdomains:['1','2','3','4'],maxZoom:20,maxNativeZoom:18}).addTo(lmap);
+    window.lmap=L.map('map',{center:[30.2943,120.1663],zoom:16,maxZoom:22});
+    L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',{subdomains:['1','2','3','4'],maxZoom:22,maxNativeZoom:18}).addTo(lmap);
     lmap.invalidateSize();
 
-    // 航向箭头 (DivIcon  + CSS 旋转)
-    var arrowDiv=L.divIcon({className:'',html:'<div style="width:20px;height:20px;line-height:20px;text-align:center;font-size:18px;color:#1a73e8;text-shadow:0 0 3px #fff;transform-origin:center">▲</div>',iconSize:[20,20],iconAnchor:[10,10]});
-    leafGps=L.marker([30.2943,120.1663],{icon:arrowDiv}).addTo(lmap);
-    leafTrack=L.polyline([],{color:'#1a73e8',weight:3}).addTo(lmap);
-    follow=true; // 自动跟随
+    leafGps=L.marker([30.2943,120.1663],{icon:L.divIcon({className:'',
+      html:'<div style="width:40px;height:40px;background:rgba(26,115,232,.85);border:3px solid #fff;border-radius:50%;box-shadow:0 3px 10px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center"><span style="color:#fff;font-size:28px;line-height:1;transform-origin:center;text-shadow:0 2px 4px rgba(0,0,0,.3);transition:transform .4s ease-out">▲</span></div>',
+      iconSize:[40,40],iconAnchor:[20,20]})}).addTo(lmap);
+    leafTrack=L.polyline([],{color:'#1a73e8',weight:6,opacity:.8}).addTo(lmap);
+    leafPostTrack=L.polyline([],{color:'#999',weight:3,opacity:.6,dashArray:'8,6'}).addTo(lmap);
+    follow=true;
+    // 如果 fGPS 已经拿到定位了, 立即居中
+    if(gps.v)centerGPS();
 
     // 网格图层
     var gridLayer=L.featureGroup().addTo(lmap);
@@ -353,9 +436,12 @@ function initLeaflet(){
 
     document.getElementById('cv').style.display='none';
     document.getElementById('cz').style.display='none';
-    fetch('http://ip-api.com/json/?fields=status,lat,lon,country').then(function(r){return r.json();}).then(function(d){
-      if(d.status==='success'&&d.country==='China')lmap.setView([d.lat,d.lon],16);
-    }).catch(function(){});
+    // IP定位兜底 (仅当GPS无定位时)
+    setTimeout(function(){
+      if(!gps.v)fetch('http://ip-api.com/json/?fields=status,lat,lon,country').then(function(r){return r.json();}).then(function(d){
+        if(d.status==='success'&&d.country==='China')lmap.setView([d.lat,d.lon],16);
+      }).catch(function(){});
+    },5000);
   }catch(e){console.log('地图:',e);}
 }
 
@@ -415,14 +501,13 @@ setInterval(fWS,5000);fWS();
 // ===== NMEA =====
 function nCS(s){var c=0;for(var i=0;i<s.length;i++)c^=s.charCodeAt(i);return c.toString(16).toUpperCase().padStart(2,'0');}
 var nSt={RMC:true,GGA:false,GSA:false,GSV:false,VTG:false,ZDA:false};
-function tN(b,n){nSt[n]=!nSt[n];b.classList.toggle('active',nSt[n]);nm('msg',n,nSt[n]?1:0);}
-var lastRaw={}; // 上一帧原始NMEA缓存
+function tN(b,n){nSt[n]=!nSt[n];b.classList.toggle('active',nSt[n]);if(nSt[n])nm('msg',n,1);}
+var lastRaw={};
 function uM(){
   var sel=Object.keys(nSt).filter(function(k){return nSt[k];});
   var lines=[];
   sel.forEach(function(s){
-    var key='raw_'+s.toLowerCase();
-    if(lastRaw[key])lines.push(lastRaw[key]);
+    if(lastRaw[s.toLowerCase()])lines.push(lastRaw[s.toLowerCase()]);
   });
   document.getElementById('c-msg-out').value=lines.join('\n');
 }

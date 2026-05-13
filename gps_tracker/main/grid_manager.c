@@ -6,178 +6,203 @@
 #include <math.h>
 
 static const char *TAG = "grid_manager";
-static grid_data_t s_grid = {0};
+static param_grid_t s_grid = {0};
 static bool s_has_grid = false;
+static char s_json[96000];
 
-/* 地球参数 */
-#define EARTH_RADIUS 6371000.0
-#define METER_PER_DEG 111320.0
+#define MPD 111320.0
+#define PI 3.141592653589793
 
-/* 经纬度转米 */
-static void latlng_to_meters(double lat, double lng, double *x, double *y)
+static double deg2rad(double d) { return d * PI / 180.0; }
+
+/* 经纬度→米 (以原点为基准) */
+static void ll2m(double lat, double lng, double *x, double *y)
 {
-    double mid_lat = (s_grid.min_lat + s_grid.max_lat) / 2.0 * M_PI / 180.0;
-    *x = (lng - s_grid.min_lng) * METER_PER_DEG * cos(mid_lat);
-    *y = (lat - s_grid.min_lat) * METER_PER_DEG;
+    double mc = cos(deg2rad(s_grid.origin_lat));
+    *x = (lng - s_grid.origin_lng) * MPD * mc;
+    *y = (lat - s_grid.origin_lat) * MPD;
 }
 
-/* 米转经纬度 */
-static void meters_to_latlng(double x, double y, double *lat, double *lng)
+/* 米→经纬度 */
+static void m2ll(double x, double y, double *lat, double *lng)
 {
-    double mid_lat = (s_grid.min_lat + s_grid.max_lat) / 2.0 * M_PI / 180.0;
-    *lng = s_grid.min_lng + x / (METER_PER_DEG * cos(mid_lat));
-    *lat = s_grid.min_lat + y / METER_PER_DEG;
+    double mc = cos(deg2rad(s_grid.origin_lat));
+    *lng = s_grid.origin_lng + x / (MPD * mc);
+    *lat = s_grid.origin_lat + y / MPD;
 }
 
 esp_err_t grid_manager_init(void)
 {
-    /* 尝试从NVS加载 */
+    esp_err_t ret = nvs_flash_init_partition("nvs_grid");
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        nvs_flash_erase_partition("nvs_grid");
+        ret = nvs_flash_init_partition("nvs_grid");
+    }
+    if (ret != ESP_OK) ESP_LOGE(TAG, "nvs_grid分区初始化失败");
     esp_err_t err = grid_manager_load();
-    if (err == ESP_OK && s_has_grid) {
-        ESP_LOGI(TAG, "从NVS加载网格: %d行 x %d列 = %d个",
-                 s_grid.total_rows, s_grid.total_cols, s_grid.total_cells);
-    } else {
-        ESP_LOGI(TAG, "网格管理器初始化完成 (无网格数据)");
-    }
+    if (err == ESP_OK && s_has_grid)
+        ESP_LOGI(TAG, "从NVS加载网格: %d行 x %d列", s_grid.total_rows, s_grid.total_cols);
+    else
+        ESP_LOGI(TAG, "无网格数据");
     return ESP_OK;
 }
 
-esp_err_t grid_manager_set_polygon(double points[][2], int count)
+esp_err_t grid_manager_generate(double corners[4][2], double cell_size_m)
 {
-    if (count < 3 || count > MAX_POLYGON_POINTS) return ESP_ERR_INVALID_ARG;
-    s_grid.point_count = count;
-    s_grid.min_lat = 1e9; s_grid.min_lng = 1e9;
-    s_grid.max_lat = -1e9; s_grid.max_lng = -1e9;
-    for (int i = 0; i < count; i++) {
-        s_grid.polygon[i][0] = points[i][0];
-        s_grid.polygon[i][1] = points[i][1];
-        if (points[i][0] < s_grid.min_lat) s_grid.min_lat = points[i][0];
-        if (points[i][0] > s_grid.max_lat) s_grid.max_lat = points[i][0];
-        if (points[i][1] < s_grid.min_lng) s_grid.min_lng = points[i][1];
-        if (points[i][1] > s_grid.max_lng) s_grid.max_lng = points[i][1];
-    }
-    return ESP_OK;
-}
+    /* 计算旋转角: 取第1-2条边的方向 */
+    double dx = (corners[1][1] - corners[0][1]) * MPD * cos(deg2rad(corners[0][0]));
+    double dy = (corners[1][0] - corners[0][0]) * MPD;
+    s_grid.angle = atan2(dy, dx);
+    s_grid.origin_lat = corners[0][0];
+    s_grid.origin_lng = corners[0][1];
+    s_grid.cell_size = cell_size_m;
 
-esp_err_t grid_manager_generate(double grid_size_meters)
-{
-    double w_m, h_m;
-    latlng_to_meters(s_grid.max_lat, s_grid.max_lng, &w_m, &h_m);
-    /* w_m 和 h_m 是从min_lat/min_lng起的偏移 */
-    double mid_lat = (s_grid.min_lat + s_grid.max_lat) / 2.0 * M_PI / 180.0;
-    double w = (s_grid.max_lng - s_grid.min_lng) * METER_PER_DEG * cos(mid_lat);
-    double h = (s_grid.max_lat - s_grid.min_lat) * METER_PER_DEG;
-
-    s_grid.grid_size = grid_size_meters;
-    s_grid.total_cols = (int)ceil(w / grid_size_meters);
-    s_grid.total_rows = (int)ceil(h / grid_size_meters);
-    s_grid.total_cells = 0;
-
-    double lng_step = (s_grid.max_lng - s_grid.min_lng) / s_grid.total_cols;
-    double lat_step = (s_grid.max_lat - s_grid.min_lat) / s_grid.total_rows;
-
-    for (int r = 0; r < s_grid.total_rows && s_grid.total_cells < MAX_GRID_CELLS; r++) {
-        for (int c = 0; c < s_grid.total_cols && s_grid.total_cells < MAX_GRID_CELLS; c++) {
-            grid_cell_t *cell = &s_grid.cells[s_grid.total_cells];
-            cell->row = r + 1;
-            cell->col = c + 1;
-            cell->min_lat = s_grid.min_lat + r * lat_step;
-            cell->min_lng = s_grid.min_lng + c * lng_step;
-            cell->max_lat = cell->min_lat + lat_step;
-            cell->max_lng = cell->min_lng + lng_step;
-            s_grid.total_cells++;
-        }
+    /* 把所有4个角转到局部坐标系 */
+    double cx[4], cy[4];
+    double ca = cos(s_grid.angle), sa = sin(s_grid.angle);
+    for (int i = 0; i < 4; i++) {
+        double mx, my;
+        ll2m(corners[i][0], corners[i][1], &mx, &my);
+        cx[i] = mx * ca + my * sa;
+        cy[i] = -mx * sa + my * ca;
+        memcpy(s_grid.polygon[i], corners[i], 2 * sizeof(double));
     }
 
-    s_has_grid = s_grid.total_cells > 0;
+    /* 计算局部bbox */
+    double minx = 1e9, maxx = -1e9, miny = 1e9, maxy = -1e9;
+    for (int i = 0; i < 4; i++) {
+        if (cx[i] < minx) minx = cx[i];
+        if (cx[i] > maxx) maxx = cx[i];
+        if (cy[i] < miny) miny = cy[i];
+        if (cy[i] > maxy) maxy = cy[i];
+    }
+
+    double w = maxx - minx, h = maxy - miny;
+    s_grid.total_cols = (int)ceil(w / cell_size_m);
+    s_grid.total_rows = (int)ceil(h / cell_size_m);
+    if (s_grid.total_cols < 1) s_grid.total_cols = 1;
+    if (s_grid.total_rows < 1) s_grid.total_rows = 1;
+
+    s_has_grid = true;
     grid_manager_save();
 
-    ESP_LOGI(TAG, "网格已生成: %d行 x %d列 = %d个 (边长%.1fm)",
-             s_grid.total_rows, s_grid.total_cols, s_grid.total_cells, grid_size_meters);
+    ESP_LOGI(TAG, "网格已生成: %d行 x %d列 = %d格, 边长%.1fm, 角%.1f°",
+             s_grid.total_rows, s_grid.total_cols,
+             s_grid.total_rows * s_grid.total_cols, cell_size_m,
+             s_grid.angle * 180.0 / PI);
     return ESP_OK;
 }
 
-void grid_manager_query(double lat, double lng, char *grid_id, size_t len)
+void grid_manager_query(double lat, double lng, char *id, size_t len)
 {
-    if (!s_has_grid) {
-        strncpy(grid_id, "0", len);
+    if (!s_has_grid) { strncpy(id, "0", len); return; }
+
+    double mx, my;
+    ll2m(lat, lng, &mx, &my);
+    double ca = cos(s_grid.angle), sa = sin(s_grid.angle);
+    double lx = mx * ca + my * sa;
+    double ly = -mx * sa + my * ca;
+
+    /* 计算局部bbox */
+    double cx[4], cy[4];
+    for (int i = 0; i < 4; i++) {
+        double mxx, myy;
+        ll2m(s_grid.polygon[i][0], s_grid.polygon[i][1], &mxx, &myy);
+        cx[i] = mxx * ca + myy * sa;
+        cy[i] = -mxx * sa + myy * ca;
+    }
+    double minx = 1e9, maxx = -1e9, miny = 1e9, maxy = -1e9;
+    for (int i = 0; i < 4; i++) {
+        if (cx[i] < minx) minx = cx[i];
+        if (cx[i] > maxx) maxx = cx[i];
+        if (cy[i] < miny) miny = cy[i];
+        if (cy[i] > maxy) maxy = cy[i];
+    }
+
+    int col = (int)floor((lx - minx) / s_grid.cell_size);
+    int row = (int)floor((ly - miny) / s_grid.cell_size);
+    if (col < 0 || col >= s_grid.total_cols || row < 0 || row >= s_grid.total_rows) {
+        strncpy(id, "0", len);
         return;
     }
-    if (lat < s_grid.min_lat || lat > s_grid.max_lat ||
-        lng < s_grid.min_lng || lng > s_grid.max_lng) {
-        strncpy(grid_id, "0", len);
-        return;
+    snprintf(id, len, "%d,%d", row + 1, col + 1);
+}
+
+/* 生成单个格子4个角的经纬度 */
+static void cell_corners(int row, int col, double pts[4][2])
+{
+    double ca = cos(s_grid.angle), sa = sin(s_grid.angle);
+
+    /* 计算局部bbox */
+    double cx[4], cy[4];
+    for (int i = 0; i < 4; i++) {
+        double mx, my;
+        ll2m(s_grid.polygon[i][0], s_grid.polygon[i][1], &mx, &my);
+        cx[i] = mx * ca + my * sa;
+        cy[i] = -mx * sa + my * ca;
     }
-    double mid_lat = (s_grid.min_lat + s_grid.max_lat) / 2.0 * M_PI / 180.0;
-    double dx = (lng - s_grid.min_lng) * METER_PER_DEG * cos(mid_lat);
-    double dy = (lat - s_grid.min_lat) * METER_PER_DEG;
-    int col = (int)floor(dx / s_grid.grid_size) + 1;
-    int row = (int)floor(dy / s_grid.grid_size) + 1;
-    if (col < 1 || col > s_grid.total_cols || row < 1 || row > s_grid.total_rows) {
-        strncpy(grid_id, "0", len);
-        return;
+    double minx = 1e9, maxx = -1e9, miny = 1e9, maxy = -1e9;
+    for (int i = 0; i < 4; i++) {
+        if (cx[i] < minx) minx = cx[i];
+        if (cx[i] > maxx) maxx = cx[i];
+        if (cy[i] < miny) miny = cy[i];
+        if (cy[i] > maxy) maxy = cy[i];
     }
-    snprintf(grid_id, len, "%d,%d", row, col);
+
+    double s = s_grid.cell_size;
+    double x0 = minx + col * s, y0 = miny + row * s;
+    double x1 = x0 + s, y1 = y0 + s;
+    /* 逆时针4角: 逆旋回WGS84 */
+    double local[4][2] = {{x0,y0},{x1,y0},{x1,y1},{x0,y1}};
+    for (int i = 0; i < 4; i++) {
+        double rx = local[i][0] * ca - local[i][1] * sa;
+        double ry = local[i][0] * sa + local[i][1] * ca;
+        m2ll(rx, ry, &pts[i][0], &pts[i][1]);
+    }
 }
 
 char *grid_manager_get_json(void)
 {
-    static char json[16384];
+    if (!s_has_grid) { strcpy(s_json, "{\"grids\":[]}"); return s_json; }
     size_t pos = 0;
-    pos += snprintf(json + pos, sizeof(json) - pos,
-        "{\"polygon\":[");
-    for (int i = 0; i < s_grid.point_count; i++) {
-        pos += snprintf(json + pos, sizeof(json) - pos, "%s[%.6f,%.6f]",
-            i > 0 ? "," : "", s_grid.polygon[i][1], s_grid.polygon[i][0]);
+    pos += snprintf(s_json + pos, sizeof(s_json) - pos,
+        "{\"grid_size\":%.1f,\"angle\":%.3f,\"rows\":%d,\"cols\":%d,\"total\":%d,\"polygon\":[",
+        s_grid.cell_size, s_grid.angle, s_grid.total_rows, s_grid.total_cols,
+        s_grid.total_rows * s_grid.total_cols);
+    for (int i = 0; i < 4; i++)
+        pos += snprintf(s_json + pos, sizeof(s_json) - pos, "%s[%.6f,%.6f]",
+            i ? "," : "", s_grid.polygon[i][1], s_grid.polygon[i][0]);
+    pos += snprintf(s_json + pos, sizeof(s_json) - pos, "],\"grids\":[");
+    int n = s_grid.total_rows * s_grid.total_cols;
+    int show = n > MAX_GRID_DISPLAY ? MAX_GRID_DISPLAY : n;
+    for (int i = 0, idx = 0; i < s_grid.total_rows && idx < show; i++) {
+        for (int j = 0; j < s_grid.total_cols && idx < show; j++, idx++) {
+            double pts[4][2];
+            cell_corners(i, j, pts);
+            pos += snprintf(s_json + pos, sizeof(s_json) - pos,
+                "%s{\"id\":\"%d,%d\",\"bounds\":[[%.6f,%.6f],[%.6f,%.6f]]}",
+                idx ? "," : "", i+1, j+1,
+                pts[0][1], pts[0][0], pts[2][1], pts[2][0]);
+        }
     }
-    pos += snprintf(json + pos, sizeof(json) - pos,
-        "],\"grid_size\":%.1f,\"total_rows\":%d,\"total_cols\":%d,\"total_grids\":%d,\"grids\":[",
-        s_grid.grid_size, s_grid.total_rows, s_grid.total_cols, s_grid.total_cells);
-    int show = s_grid.total_cells > 500 ? 500 : s_grid.total_cells;
-    for (int i = 0; i < show; i++) {
-        grid_cell_t *c = &s_grid.cells[i];
-        pos += snprintf(json + pos, sizeof(json) - pos,
-            "%s{\"id\":\"%d,%d\",\"bounds\":[[%.6f,%.6f],[%.6f,%.6f]]}",
-            i > 0 ? "," : "", c->row, c->col,
-            c->min_lng, c->min_lat, c->max_lng, c->max_lat);
-    }
-    pos += snprintf(json + pos, sizeof(json) - pos, "]}");
-    return json;
+    pos += snprintf(s_json + pos, sizeof(s_json) - pos, "]}");
+    return s_json;
 }
 
 char *grid_manager_get_cells_json(void)
 {
-    static char json[16384];
-    size_t pos = 0;
-    pos += snprintf(json + pos, sizeof(json) - pos,
-        "{\"grid_size\":%.1f,\"total_rows\":%d,\"total_cols\":%d,\"total_grids\":%d,\"grids\":[",
-        s_grid.grid_size, s_grid.total_rows, s_grid.total_cols, s_grid.total_cells);
-    int show = s_grid.total_cells > 500 ? 500 : s_grid.total_cells;
-    for (int i = 0; i < show; i++) {
-        grid_cell_t *c = &s_grid.cells[i];
-        pos += snprintf(json + pos, sizeof(json) - pos,
-            "%s{\"id\":\"%d,%d\",\"bounds\":[[%.6f,%.6f],[%.6f,%.6f]]}",
-            i > 0 ? "," : "", c->row, c->col,
-            c->min_lng, c->min_lat, c->max_lng, c->max_lat);
-    }
-    pos += snprintf(json + pos, sizeof(json) - pos, "]}");
-    return json;
+    return grid_manager_get_json();
 }
 
 esp_err_t grid_manager_clear(void)
 {
     s_has_grid = false;
-    s_grid.total_cells = 0;
-    s_grid.total_rows = 0;
-    s_grid.total_cols = 0;
-    s_grid.point_count = 0;
-    /* 从NVS清除 */
-    nvs_handle_t handle;
-    esp_err_t err = nvs_open("grid_data", NVS_READWRITE, &handle);
-    if (err == ESP_OK) {
-        nvs_erase_all(handle);
-        nvs_commit(handle);
-        nvs_close(handle);
+    memset(&s_grid, 0, sizeof(s_grid));
+    nvs_handle_t h;
+    if (nvs_open_from_partition("nvs_grid", "grid_data", NVS_READWRITE, &h) == ESP_OK) {
+        nvs_erase_all(h);
+        nvs_commit(h);
+        nvs_close(h);
     }
     ESP_LOGI(TAG, "网格已清除");
     return ESP_OK;
@@ -185,29 +210,29 @@ esp_err_t grid_manager_clear(void)
 
 esp_err_t grid_manager_save(void)
 {
-    nvs_handle_t handle;
-    esp_err_t err = nvs_open("grid_data", NVS_READWRITE, &handle);
+    nvs_handle_t h;
+    esp_err_t err = nvs_open_from_partition("nvs_grid", "grid_data", NVS_READWRITE, &h);
     if (err != ESP_OK) return err;
-    nvs_set_blob(handle, "grid_data", &s_grid, sizeof(grid_data_t));
-    nvs_set_u8(handle, "has_grid", s_has_grid ? 1 : 0);
-    nvs_commit(handle);
-    nvs_close(handle);
+    nvs_set_blob(h, "grid", &s_grid, sizeof(s_grid));
+    nvs_set_u8(h, "has", s_has_grid ? 1 : 0);
+    nvs_commit(h);
+    nvs_close(h);
     return ESP_OK;
 }
 
 esp_err_t grid_manager_load(void)
 {
-    nvs_handle_t handle;
-    esp_err_t err = nvs_open("grid_data", NVS_READONLY, &handle);
+    nvs_handle_t h;
+    esp_err_t err = nvs_open_from_partition("nvs_grid", "grid_data", NVS_READONLY, &h);
     if (err != ESP_OK) return err;
-    size_t size = sizeof(grid_data_t);
-    err = nvs_get_blob(handle, "grid_data", &s_grid, &size);
+    size_t sz = sizeof(s_grid);
+    err = nvs_get_blob(h, "grid", &s_grid, &sz);
     if (err == ESP_OK) {
-        uint8_t flag = 0;
-        nvs_get_u8(handle, "has_grid", &flag);
-        s_has_grid = flag != 0;
+        uint8_t f = 0;
+        nvs_get_u8(h, "has", &f);
+        s_has_grid = f != 0;
     }
-    nvs_close(handle);
+    nvs_close(h);
     return ESP_OK;
 }
 
