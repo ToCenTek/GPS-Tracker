@@ -12,6 +12,7 @@ static char s_connected_ssid[33] = {0};
 static bool s_sta_connected = false;
 static char s_pending_ssid[33] = {0};
 static char s_pending_pwd[65] = {0};
+static bool s_connecting_new = false;
 static esp_netif_t *s_ap_netif = NULL;
 static esp_netif_t *s_sta_netif = NULL;
 
@@ -41,7 +42,11 @@ static void event_handler(void *arg, esp_event_base_t base, int32_t id, void *da
             s_sta_connected = false;
             memset(s_sta_ip, 0, sizeof(s_sta_ip));
             strcpy(s_sta_ip, "0.0.0.0");
-            ESP_LOGI(TAG, "STA断开连接, 尝试重连");
+            if (s_connecting_new) {
+                ESP_LOGI(TAG, "STA断开, 正在尝试新连接");
+                return;
+            }
+            ESP_LOGI(TAG, "STA意外断开, 尝试重连");
             char ssid[33] = {0}, pwd[65] = {0};
             nvs_handle_t h;
             if (nvs_open("wifi_cfg", NVS_READONLY, &h) == ESP_OK) {
@@ -63,6 +68,7 @@ static void event_handler(void *arg, esp_event_base_t base, int32_t id, void *da
         ip_event_got_ip_t *ev = (ip_event_got_ip_t *)data;
         esp_ip4addr_ntoa(&ev->ip_info.ip, s_sta_ip, sizeof(s_sta_ip));
         s_sta_connected = true;
+        s_connecting_new = false;
         ESP_LOGI(TAG, "STA获取IP: %s", s_sta_ip);
         /* 连接成功后才保存凭据到NVS */
         if (strlen(s_pending_ssid)) {
@@ -131,6 +137,7 @@ bool wifi_manager_is_sta_connected(void)
 
 esp_err_t wifi_manager_sta_connect(const char *ssid, const char *password)
 {
+    s_connecting_new = true;
     strncpy(s_pending_ssid, ssid, sizeof(s_pending_ssid) - 1);
     if (password) strncpy(s_pending_pwd, password, sizeof(s_pending_pwd) - 1);
     strncpy(s_connected_ssid, ssid, sizeof(s_connected_ssid) - 1);
