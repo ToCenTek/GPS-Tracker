@@ -65,7 +65,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
   </div>
   <div style="display:flex;margin-left:auto;align-items:center;gap:4px;flex-wrap:wrap;justify-content:flex-end;max-width:45%">
     <span style="font-size:12px;padding:2px 8px;border-radius:12px;background:#e8f0fe;color:var(--p);font-weight:600;white-space:nowrap" id="wfb">SoftAP</span>
-    <div class="si" style="text-align:right"><span class="v" id="gps-ll" style="word-break:break-all">--</span></div>
+    <div class="si" style="text-align:right;line-height:1.3"><span class="v" id="gps-ll">--</span></div>
   </div>
   <span style="display:none;font-size:12px;font-weight:700;color:var(--d)" id="rec-ind">●录制中</span>
 </div>
@@ -257,7 +257,7 @@ function fGPS(){fetch('/gps').then(function(r){return r.json();}).then(function(
   document.getElementById('gps-dot').className='dot '+(f?'dg':'dr');
   document.getElementById('sat-n').textContent=d.satellites||0;
   document.getElementById('gid-n').textContent=d.grid||'0';
-  document.getElementById('gps-ll').textContent=f?d.latitude+','+d.longitude:'--';
+  document.getElementById('gps-ll').innerHTML=f?d.latitude+',<br>'+d.longitude:'--';
   function ftm(t){return t&&t.length>=6?t.substr(0,2)+':'+t.substr(2,2)+':'+t.substr(4,2):'--';}
   function fdt(d){return d&&d.length>=6?'20'+d.substr(4,2)+'-'+d.substr(2,2)+'-'+d.substr(0,2):'--';}
   document.getElementById('p-bj').textContent=ftm(d.bj_time);
@@ -280,7 +280,7 @@ function fGPS(){fetch('/gps').then(function(r){return r.json();}).then(function(
   }catch(e){}}).catch(function(){}).then(function(){setTimeout(fGPS,1000);});}
 fGPS();
 // 独立轮询: 检测到GPS定位后自动居中 (不依赖fGPS的调用链)
-setInterval(function(){if(gps.v&&lmap&&follow)centerGPS();},500);
+setInterval(function(){if(gps.v&&lmap&&follow)centerGPS();},2000);
 lmap.on('dragstart',function(){follow=false;});
 
 // ===== 原始NMEA =====
@@ -290,7 +290,7 @@ function fNMEA(){fetch('/nmea').then(function(r){return r.json();}).then(functio
   });
   uM();
 }).catch(function(){});}
-setInterval(fNMEA,1000);fNMEA();
+setTimeout(fNMEA,3000);setInterval(fNMEA,5000);
 
 // ===== 在线检测 =====
 // IP定位兜底 (仅当GPS无定位时)
