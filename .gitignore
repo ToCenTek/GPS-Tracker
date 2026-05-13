@@ -25,6 +25,11 @@ venv/
 .DS_Store
 Thumbs.db
 
+# Assets
+*.STL
+*.stl
+*.pdf
+
 # Project specific
 main/leaflet.js
 main/leaflet.css

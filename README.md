@@ -1,12 +1,12 @@
 # GPS追踪系统
 
-基于 Xtensa LX6 双核 240MHz + TD1030（BDS B1 / GPS L1 / GLONASS L1 三频点）GNSS 模块，通过 WiFi 热点提供 Web 界面，支持实时位置显示、轨迹记录、区域绘制、网格划分。附带 OLED 屏幕显示关键数据。
+基于 ESP32 + N305-5Q（TD1050, BDS B1I/B1C / GPS L1 / GLONASS L1 / GAL E1）多模 GNSS 模块。提供 Web 界面（高德地图/Canvas 离线），支持实时定位、轨迹记录、航向指北、参数化网格划分。OLED 屏幕显示关键数据。
 
-- **WiFi SoftAP**: SSID `GPS`, 密码通过 `menuconfig` 配置（默认 `12345678`，建议编译前修改）
-- **Web (SoftAP 模式)**: `http://192.168.4.1` (Canvas 离线网格)
-- **Web (Station 模式)**: `http://10.0.0.67` (Leaflet + 高德地图)
-- **OLED**: 0.96" SSD1306/SSD1315, `I2C` (`SDA`=21, `SCL`=22), 软件 `I2C` (bit-bang)
-- **串口**: 浏览串口日志确认系统状态
+- **WiFi SoftAP**: SSID `GPS`, 密码通过 `menuconfig` 配置（默认 `12345678`）
+- **Web (SoftAP 模式)**: `http://192.168.4.1` (Canvas 离线/无外网)
+- **Web (Station 模式)**: `http://10.0.0.67` (Leaflet + 高德地图/有外网)
+- **在线/离线功能完全一致**: 仅差地图瓦片，轨迹/网格/箭头等全部相同
+- **OLED**: 0.96" SSD1306/SSD1315, I2C 地址 `0x3C`, 软件 I2C (`SDA`=21, `SCL`=22)
 
 > **关于 OLED 驱动**：当前使用软件 `I2C` (bit-bang) 实现，运行稳定，兼容各版本 `ESP-IDF`。硬件 `I2C` 驱动在不同 `IDF` 版本间存在兼容性差异，暂时不切换。
 
@@ -15,11 +15,11 @@
 | 组件      | 型号/规格                                          |
 | ------- | ---------------------------------------------- |
 | MCU     | Xtensa LX6 双核 @240MHz, 520KB SRAM, 4MB Flash   |
-| GNSS    | TD1030 — BDS B1 / GPS L1 / GLONASS L1 三频点      |
-| OLED    | 0.96" 128×64, SSD1306/SSD1315, `I2C` 地址 `0x3C` |
-| GNSS 接口 | `UART1`: `TX`=17, `RX`=16, `115200bps`         |
-| OLED 接口 | `I2C0`: `SDA`=21, `SCL`=22 (软件 `I2C`)          |
-| 持久存储    | `NVS` (WiFi 凭据、网格数据)                           |
+| GNSS    | N305-5Q (TD1050) — BDS B1I/B1C / GPS L1 / GLO L1OF / GAL E1 |
+| OLED    | 0.96" 128×64, SSD1306/SSD1315, I2C 地址 `0x3C` |
+| GNSS 接口 | UART1: `TX`=17, `RX`=16, `115200bps`           |
+| OLED 接口 | SDA=21, SCL=22 (软件 I2C bit-bang)              |
+| 持久存储    | `nvs` (WiFi 凭据) + `nvs_grid` (网格参数, 256KB)   |
 
 ## 资源占用
 
@@ -54,63 +54,73 @@
 
 ### OLED 显示
 
-- 软件 `I2C` (bit-bang) 驱动，兼容性好，不受硬件 `I2C` 驱动版本影响
-- 开机 30 秒冷启动倒计时
-- 30 秒后：黑底白字实时数据（IP / 时间 / 网格 ID / 经纬度 / 速度）
-- 网格 ID 放大居中显示
+- 软件 I2C (bit-bang)，兼容性好，不受硬件 I2C 驱动版本影响
+- 开机 30 秒冷启动倒计时（TCT logo + 秒数）
+- 30 秒后：黑底白字实时数据，布局如下：
+
+```
+┌──────────────────────────────────────┐
+│ A:192.168.4.1              A  08     │  GPS模式:IP  WiFi模式  卫星
+│ 26-05-13 20:34:56                    │  日期  时间
+│         3,7                          │  网格ID 放大居中
+│ 30.294300  120.166300                │  经纬度 (小数点后6位)
+│ 23.5kmh  50m                         │  速度(km/h) 海拔
+└──────────────────────────────────────┘
+```
 
 ### 网格管理
 
-- 从 GPS 轨迹生成闭合区域
-- 按用户输入的边长进行正方形网格划分
+- 参数化网格：存起点、旋转角、步长、行列数，不存单个格子，面积无上限
+- 从轨迹点提取最远 4 点 → 生成正北矩形区域 → 按步长划分
 - 网格编号 `row,col`（左下角开始）
-- 数据存储在 `NVS` 分区，重启不丢失
-- 演示模式：Canvas / Leaflet 自动显示 10×10 网格
+- 数据存储在 `nvs_grid` 分区（256KB），重启不丢失
+- 查询 O(1)：旋转坐标 → 公式计算行列号，不遍历任何格子
 
 ### GNSS 接收机控制
 
 - 波特率设置（`$CCCAS`）
 - 定位间隔（`$CCINV`，以 Hz 显示）
 - 工作模式切换 + 冷/温/热启动（`$CCSIR`）
-- `NMEA` 语句输出控制（`$CCMSG`，左列按钮 + 实时预览）
-- 恢复默认（`$CCDFT`，所有设置恢复出厂）
-- 原始 `NMEA` 命令输入（带校验码验证）
+- NMEA 语句显示控制（按钮仅控制页面显示，不发送 `$CCMSG` 给模块）
+- 原始 NMEA 命令输入（带校验码验证）
 
 ## API 接口
 
-| 端点              | 方法   | 说明                        |
-| --------------- | ---- | ------------------------- |
-| `/`             | GET  | Web 主界面                   |
-| `/gps`          | GET  | 解析后的 GPS 实时数据             |
-| `/nmea`         | GET  | 原始 NMEA 语句（当前按类型缓存的最新一条）  |
-| `/grid`         | GET  | 当前位置 + 所在网格 ID            |
-| `/grid`         | POST | 从区域划分网格                   |
-| `/config`       | POST | 发送 NMEA 指令                |
-| `/wifi/status`  | GET  | WiFi 状态（Station/SoftAP）   |
-| `/wifi/scan`    | GET  | 扫描 WiFi 热点                |
-| `/wifi/connect` | POST | 连接 Station 网络             |
-| `/leaflet.js`   | GET  | Leaflet 地图引擎（内部使用，不要直接访问） |
-| `/leaflet.css`  | GET  | Leaflet 样式（内部使用，不要直接访问）   |
+| 端点               | 方法   | 说明                            |
+| ----------------- | ------ | ------------------------------ |
+| `/`               | GET    | Web 主界面（Cache-Control: no-cache） |
+| `/gps`            | GET    | 格式化 JSON 实时 GPS 数据             |
+| `/gps.json`       | GET    | `/gps` 别名，向后兼容                 |
+| `/grid`           | GET    | 当前位置 + 所在网格 ID                |
+| `/grid`           | POST   | 从 4 角点+步长生成参数化网格              |
+| `/grid/data`      | GET    | 完整网格参数 + 前 500 格边界用于显示        |
+| `/nmea`           | GET    | 原始 NMEA 语句缓存                    |
+| `/config`         | POST   | 发送 NMEA 指令                     |
+| `/wifi/status`    | GET    | WiFi 状态（Station/SoftAP）        |
+| `/wifi/scan`      | GET    | 扫描 WiFi 热点                     |
+| `/wifi/connect`   | POST   | 连接 Station 网络                  |
+| `/wifi/disconnect`| POST   | 断开 Station 连接                  |
+| `/leaflet.js`     | GET    | Leaflet 地图引擎（内部使用）            |
+| `/leaflet.css`    | GET    | Leaflet 样式（内部使用）              |
 
 ## GPS JSON 格式
 
 ```
 GET /gps
 {
-  "bj_time":           "203456.000",    // 北京时间 HHMMSS.SSS
-  "status":            "A/V",           // A=有效 V=无效
-  "latitude":          "30.294300 N",   // 纬度 + 方向
-  "longitude":         "120.166300 E",  // 经度 + 方向
-  "speed_knots":       1.23,            // 速度(节)
-  "course":            45.0,            // 航向(度)
-  "date":              "230394",        // 日期 DDMMYY
-  "magnetic_variation":"0.1 E",        // 磁偏角 + 方向
-  "mode":              "A",             // 定位模式
-  "altitude":          545.4,           // 海拔(米)
-  "speed_kmh":         2.28,            // km/h
-  "speed_ms":          0.63,            // m/s
-  "satellites":        8,               // 卫星数
-  "grid":              "1,1"            // 网格ID(row,col)
+  "bj_time":            "203456.50",     // 北京时间 HHMMSS.SSS
+  "status":             "A",             // A=自主 D=差分 E=估算 M=手动 N=无效
+  "latitude":           "30.294300 N",   // 纬度 + 方向
+  "longitude":          "120.166300 E",  // 经度 + 方向
+  "speed_knots":        1.23,            // 速度(节)
+  "speed_kmh":          2.28,            // km/h (前端可直接用)
+  "speed_ms":           0.63,            // m/s
+  "course":             45.0,            // 航向(度)
+  "date":               "260513",        // 日期 DDMMYY
+  "magnetic_variation": "0.1 E",        // 磁偏角 + 方向
+  "altitude":           545.4,           // 海拔(米)
+  "satellites":         8,               // 卫星数
+  "grid":               "1,1"            // 网格ID(row,col)，0=不在网格内
 }
 ```
 
@@ -121,20 +131,21 @@ GET /grid
 {
   "latitude":  "30.294300 N",   // 当前位置纬度 + 方向
   "longitude": "120.166300 E",  // 当前位置经度 + 方向
-  "grid":      "3,7"            // 所在网格 ID (row,col)，0 表示不在网格内
+  "grid":      "3,7"            // 所在网格 ID (row,col)
 }
-```
 
-## OLED 显示布局
-
-```
-┌──────────────────────────────────────┐
-│ 192.168.4.1                  S  08   │  IP  模式  卫星数
-│ 20:34:56                             │  北京时间
-│         3,7                          │  网格ID 放大居中
-│ N30.2943  E120.1663                  │  经纬度
-│ 1.2kn  2.3kmh  545m                  │  速度(节+kmh) 海拔
-└──────────────────────────────────────┘
+GET /grid/data
+{
+  "grid_size": 2.0,                    // 步长(米)
+  "angle": 0.000,                      // 旋转角(弧度), 0=正北
+  "rows": 10, "cols": 10,             // 行列数
+  "total": 100,                        // 总格子数
+  "polygon": [[lng,lat],...],          // 区域4角点
+  "grids": [                           // 前500格边界(浏览器绘制用)
+    {"id":"1,1","bounds":[[lng,lat],[lng,lat]]},
+    ...
+  ]
+}
 ```
 
 ## 项目结构
@@ -181,20 +192,24 @@ GPS/
 - 网格持久化（NVS，含区域多边形 + 格子）
 - Kconfig 密码配置（`menuconfig` → GPS Tracker Configuration）
 
-### 🔴 待办（下个会话）
-- [ ] 实地测试：带 ESP32 出门走动，验证地图自动跟随 + 航向箭头
-- [ ] 验证轨迹记录 + 从轨迹生成区域 + 网格划分完整流程
-- [ ] 验证网格落点查询（`/gps` 返回 `grid` 字段）
-- [ ] 验证 OLED 显示真实 GPS 数据（经纬度/速度/海拔/卫星数）
-- [ ] 验证 NMEA 语句原始输出（`/nmea` 实时框）
-- [ ] 长期稳定性测试（连续运行是否崩溃/内存泄漏）
+### 🔴 待办
+- [ ] 旋转区域网格（参数化网格已预留 `angle` 字段，前端计算旋转 OBB 即可）
+- [ ] 实地大规模测试（公里级区域+2m步长的查询性能验证）
+- [ ] 长期稳定性测试（连续运行内存泄漏检查）
 
-### ✅ 代码修复（2026-05-13）
-- [x] 修复 JS 端 URL 错误: `fetch('/gps.json')` → `fetch('/gps')`（导致 404）
-- [x] 修复 JS 字段名不匹配: `speed_kilometers_per_hour` → `speed_kmh`, `utc_time` → `bj_time`
-- [x] 修复 JS 端经纬度字符串与数字类型混用（之前 `lat` 是 `"30.294300 N"` 字符串，无法参与数值运算）
-- [x] C 端 `/gps` JSON 增加 `lat` / `lng` 数字字段供前端直接使用
-- [x] 新增 C 端 `/wifi/disconnect` POST 端点（前端断开按钮之前不可用）
+### ✅ 已完成功能
+- [x] 参数化网格：无格子数量上限，O(1) 查询，256KB NVS 持久化
+- [x] 航向指北/地图指北切换（N↑/H↑ 按钮，Canvas+Leaflet 同步）
+- [x] 停止记录后持续画线（灰色虚线，不计入轨迹点）
+- [x] 网格数据页面加载自动恢复（`/grid/data` API）
+- [x] 底部面板弹出时地图自适应避免遮挡
+- [x] 网格 ID 无背景标签，缩放 < 15 自动隐藏，箭头永远最上层
+- [x] WGS84→GCJ-02 坐标转换（高德地图偏移校正）
+- [x] OLED 显示 GPS 模式指示 + 完整日期时间 + 经纬度 6 位小数
+- [x] `/gps` JSON 格式化输出（人类可读）
+- [x] `/gps.json` 向后兼容路由
+- [x] `/wifi/disconnect` 端点
+- [x] GPS 定位自动居中（独立 500ms 轮询 + fGPS 双路径）
 
 ### ⚠️ 已知问题
 - Captive Portal（强制门户）已放弃：DNS socket 耗尽 lwIP socket 池导致 HTTP 服务崩溃
