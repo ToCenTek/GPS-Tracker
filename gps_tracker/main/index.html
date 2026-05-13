@@ -142,6 +142,7 @@ document.querySelectorAll('#bt .tab').forEach(function(b){b.addEventListener('cl
   if(pnlm){pnlm=false;pnl.classList.remove('min');}});});
 
 // ===== Canvas坐标格网 =====
+var lmap, follow=true;
 try {
 var cv=document.getElementById('cv'),ctx=cv.getContext('2d'),W=0,H=0;
 function sz(){W=cv.width=cv.clientWidth;H=cv.height=cv.clientHeight;try{dr();}catch(e){}}
@@ -293,7 +294,11 @@ function fGPS(){fetch('/gps').then(function(r){return r.json();}).then(function(
   document.getElementById('p-gid').textContent=d.grid||'0';
   document.getElementById('tb-gid').textContent='📦 '+(d.grid||'0');
   if(gps.v&&isT){trk.push([gps.la,gps.lg]);document.getElementById('trk-i').textContent='轨迹:'+trk.length;}
-  if(leafGps&&gps.v){leafGps.setLatLng([gps.la,gps.lg]);if(isT)leafTrack.addLatLng([gps.la,gps.lg]);}
+  if(leafGps&&gps.v){leafGps.setLatLng([gps.la,gps.lg]);if(isT)leafTrack.addLatLng([gps.la,gps.lg]);
+    // 旋转航向箭头
+    var el=leafGps.getElement();if(el){var d=el.querySelector('div');if(d)d.style.transform='rotate('+gps.course+'deg)';}
+    // 自动跟随
+    if(typeof follow!=='undefined'&&follow)lmap.setView([gps.la,gps.lg],lmap.getZoom());}
   dr();}).catch(function(){});}
 setInterval(fGPS,1000);fGPS();
 
@@ -319,12 +324,15 @@ var online=false;
 function initLeaflet(){
   try{
     if(typeof L==='undefined')throw'No Leaflet';
-    var lmap=L.map('map',{center:[30.2943,120.1663],zoom:16,maxZoom:20});
+    lmap=L.map('map',{center:[30.2943,120.1663],zoom:16,maxZoom:20});
     L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',{subdomains:['1','2','3','4'],maxZoom:20,maxNativeZoom:18}).addTo(lmap);
     lmap.invalidateSize();
 
-    leafGps=L.circleMarker([30.2943,120.1663],{radius:8,color:'#1a73e8',fillColor:'#1a73e8',fillOpacity:0.8}).addTo(lmap);
+    // 航向箭头 (DivIcon  + CSS 旋转)
+    var arrowDiv=L.divIcon({className:'',html:'<div style="width:20px;height:20px;line-height:20px;text-align:center;font-size:18px;color:#1a73e8;text-shadow:0 0 3px #fff;transform-origin:center">▲</div>',iconSize:[20,20],iconAnchor:[10,10]});
+    leafGps=L.marker([30.2943,120.1663],{icon:arrowDiv}).addTo(lmap);
     leafTrack=L.polyline([],{color:'#1a73e8',weight:3}).addTo(lmap);
+    follow=true; // 自动跟随
 
     // 网格图层
     var gridLayer=L.featureGroup().addTo(lmap);
