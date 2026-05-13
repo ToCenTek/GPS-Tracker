@@ -55,7 +55,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 <body>
 <div id="toast"></div>
 <div id="sb">
-  <div class="si"><span class="dot dr" id="gps-dot"></span><span id="gps-st">等待</span></div>
+  <div class="si"><span class="dot dr" id="gps-dot"></span><span id="gps-st" style="display:none">等待</span></div>
   <div class="si">🛰 <span class="v" id="sat-n">0</span></div>
   <div class="si">📦 <span class="v" id="gid-n">0</span></div>
   <div id="sb-center" style="position:absolute;left:50%;transform:translateX(-50%);display:flex;gap:4px;align-items:center">
@@ -64,7 +64,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
   </div>
   <div style="display:flex;margin-left:auto;align-items:center;gap:8px;overflow:hidden">
     <span style="font-size:12px;padding:2px 8px;border-radius:12px;background:#e8f0fe;color:var(--p);font-weight:600;white-space:nowrap" id="wfb">SoftAP</span>
-    <div class="si" style="white-space:nowrap">📍 <span class="v" id="gps-ll">--</span></div>
+    <div class="si" style="white-space:nowrap"><span class="v" id="gps-ll">--</span></div>
   </div>
   <span style="display:none;font-size:12px;font-weight:700;color:var(--d)" id="rec-ind">●录制中</span>
 </div>
