@@ -296,17 +296,21 @@ document.getElementById('g-gen').addEventListener('click',function(){
   if(isNaN(sz)||sz<2||sz>40075000){toa('边长2~40075000','warning');return;}
   fetch('/grid',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({grid_size:sz,polygon:[[reg[0][1],reg[0][0]],[reg[1][1],reg[1][0]],[reg[2][1],reg[2][0]],[reg[3][1],reg[3][0]]]})})
   .then(function(r){return r.json();}).then(function(d){
-    if(d.grids){cel=d.grids.slice(0,500);document.getElementById('g-tot').value=d.total_grids||cel.length;toa('已生成','success');dr();
-      if(lmap){if(leafGrid)lmap.removeLayer(leafGrid);leafGrid=L.featureGroup().addTo(lmap);
-        cel.forEach(function(c){
-          var sw=wgs84_to_gcj02(c.bounds[0][1],c.bounds[0][0]),ne=wgs84_to_gcj02(c.bounds[1][1],c.bounds[1][0]);
-          var r=L.rectangle([[sw.lat,sw.lng],[ne.lat,ne.lng]],{color:'#3c78c8',weight:.8,fillOpacity:0});
-          r.bindTooltip(c.id,{permanent:true,direction:'center',sticky:false,className:'grid-label'});
-          var z=lmap.getZoom();if(z<15)r.closeTooltip();else r.openTooltip();
-          leafGrid.addLayer(r);});
-        lmap.on('zoomend',function(){leafGrid.eachLayer(function(l){if(lmap.getZoom()<15)l.closeTooltip();else l.openTooltip();});});}
-
-  fetch('/grid/data').then(function(r){return r.json();}).then(function(d){
+    if(d.grids){cel=d.grids.slice(0,500);document.getElementById('g-tot').value=d.total_grids||cel.length;toa('已生成','success');dr();}
+    if(lmap&&cel.length){
+      if(leafGrid)lmap.removeLayer(leafGrid);
+      leafGrid=L.featureGroup().addTo(lmap);
+      cel.forEach(function(c){
+        var sw=wgs84_to_gcj02(c.bounds[0][1],c.bounds[0][0]),ne=wgs84_to_gcj02(c.bounds[1][1],c.bounds[1][0]);
+        var r=L.rectangle([[sw.lat,sw.lng],[ne.lat,ne.lng]],{color:'#3c78c8',weight:.8,fillOpacity:0});
+        r.bindTooltip(c.id,{permanent:true,direction:'center',sticky:false,className:'grid-label'});
+        if(lmap.getZoom()<15)r.closeTooltip();else r.openTooltip();
+        leafGrid.addLayer(r);});
+      lmap.on('zoomend',function(){leafGrid.eachLayer(function(l){if(lmap.getZoom()<15)l.closeTooltip();else l.openTooltip();});});}
+  }).catch(function(){});
+});
+  // ===== 页面加载时读取网格数据 =====
+fetch('/grid/data').then(function(r){return r.json();}).then(function(d){
     if(d.grids&&d.grids.length){cel=d.grids.slice(0,500);
       if(lmap){leafGrid=L.featureGroup().addTo(lmap);
         cel.forEach(function(c){
@@ -315,7 +319,7 @@ document.getElementById('g-gen').addEventListener('click',function(){
           r.bindTooltip(c.id,{permanent:true,direction:'center',sticky:false,className:'grid-label'});
           leafGrid.addLayer(r);});
         lmap.on('zoomend',function(){leafGrid.eachLayer(function(l){if(lmap.getZoom()<15)l.closeTooltip();else l.openTooltip();});});}}
-  }).catch(function(){toa('失败','danger');});});
+  }).catch(function(){toa('失败','danger');});
 document.getElementById('g-del').addEventListener('click',function(){cel=[];if(leafGrid){lmap.removeLayer(leafGrid);leafGrid=null;}document.getElementById('tb-gid').textContent='📦 0';toa('清除','info');dr();});
 
 // ===== 页面加载时读取网格数据 =====

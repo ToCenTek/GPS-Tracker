@@ -210,23 +210,23 @@ document.getElementById('g-gen').addEventListener('click',function(){
 document.getElementById('g-del').addEventListener('click',function(){cel=[];document.getElementById('tb-gid').textContent='📦 0';toa('清除','info');dr();});
 
 // ===== GPS =====
-function fGPS(){fetch('/gps.json').then(function(r){return r.json();}).then(function(d){
-  gps.v=d.status==='A'&&d.latitude!==0;
-  if(gps.v){gps.la=d.latitude;gps.lg=d.longitude;gps.course=d.course;}
+  function fGPS(){fetch('/gps').then(function(r){return r.json();}).then(function(d){
+  gps.v=d.status==='A'&&d.lat!==0;
+  if(gps.v){gps.la=d.lat;gps.lg=d.lng;gps.course=d.course;}
   document.getElementById('gps-dot').className='dot '+(gps.v?'dg':'dr');
   document.getElementById('gps-st').textContent=gps.v?'定位':'等待';
   document.getElementById('sat-n').textContent=d.satellites||0;
   document.getElementById('gid-n').textContent=d.grid||'0';
-  document.getElementById('gps-ll').textContent=gps.v?gps.la.toFixed(4)+','+gps.lg.toFixed(4):'--';
+  document.getElementById('gps-ll').textContent=gps.v?(gps.la.toFixed(4)+','+gps.lg.toFixed(4)):'--';
   document.getElementById('p-la').textContent=gps.v?gps.la.toFixed(6):'--';
   document.getElementById('p-lo').textContent=gps.v?gps.lg.toFixed(6):'--';
   document.getElementById('p-al').innerHTML=gps.v?((d.altitude||0).toFixed(1)+' <span class="u">m</span>'):'--';
   document.getElementById('p-cr').innerHTML=gps.v?((gps.course||0).toFixed(1)+' <span class="u">°</span>'):'--';
   document.getElementById('p-sk').textContent=gps.v?(d.speed_knots||0).toFixed(2):'--';
-  document.getElementById('p-skm').textContent=gps.v?(d.speed_kilometers_per_hour||0).toFixed(2):'--';
+  document.getElementById('p-skm').textContent=gps.v?(d.speed_kmh||0).toFixed(2):'--';
   document.getElementById('p-sat').textContent=d.satellites||0;
   document.getElementById('p-mod').textContent=gps.v?d.mode:'--';
-  document.getElementById('p-utc').textContent=d.utc_time||'--';
+  document.getElementById('p-utc').textContent=d.bj_time||'--';
   document.getElementById('p-gid').textContent=d.grid||'0';
   document.getElementById('tb-gid').textContent='📦 '+(d.grid||'0');
   if(gps.v&&isT){trk.push([gps.la,gps.lg]);document.getElementById('trk-i').textContent='轨迹:'+trk.length;}
