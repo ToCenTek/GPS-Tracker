@@ -293,18 +293,6 @@ setTimeout(function(){
     if(d.status==='success'&&d.country==='China')lmap.setView([d.lat,d.lon],16);
   }).catch(function(){});
 },5000);
-    updGrid();
-    // 网格更新: GPS移动时重绘(演示网格跟随位置)
-    setInterval(function(){if(gps.v)updGrid();},3000);
-
-    document.getElementById('cz').style.display='none';
-    // IP定位兜底 (仅当GPS无定位时)
-    setTimeout(function(){
-      if(!gps.v)fetch('http://ip-api.com/json/?fields=status,lat,lon,country').then(function(r){return r.json();}).then(function(d){
-        if(d.status==='success'&&d.country==='China')lmap.setView([d.lat,d.lon],16);
-      }).catch(function(){});
-    },5000);
-
 
 
 // ===== WiFi =====
