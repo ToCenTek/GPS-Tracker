@@ -159,13 +159,12 @@ esp_err_t wifi_manager_sta_connect(const char *ssid, const char *password)
 
 esp_err_t wifi_manager_sta_disconnect(void)
 {
-    save_cred("", "");
     s_sta_connected = false;
     memset(s_connected_ssid, 0, sizeof(s_connected_ssid));
     memset(s_sta_ip, 0, sizeof(s_sta_ip));
     strcpy(s_sta_ip, "0.0.0.0");
     esp_wifi_disconnect();
-    ESP_LOGI(TAG, "STA已断开");
+    ESP_LOGI(TAG, "STA已断开 (凭据保留, 下次启动自动重连)");
     return ESP_OK;
 }
 
