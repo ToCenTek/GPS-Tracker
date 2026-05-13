@@ -5,8 +5,6 @@
 #include "receiver_config.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
-#include "lwip/sockets.h"
-#include "lwip/netdb.h"
 #include <string.h>
 #include <stdio.h>
 #include <cJSON.h>
@@ -260,65 +258,6 @@ static esp_err_t leaflet_css_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-/* 404 → 302 重定向 (Captive Portal) */
-static esp_err_t redirect_404_handler(httpd_req_t *req, httpd_err_code_t err)
-{
-    (void)err;
-    httpd_resp_set_status(req, "302 Found");
-    httpd_resp_set_hdr(req, "Location", "http://192.168.4.1/");
-    httpd_resp_send(req, NULL, 0);
-    return ESP_OK;
-}
-
-/* DNS 劫持服务器: 所有域名 → 192.168.4.1 */
-static void dns_task(void *arg)
-{
-    (void)arg;
-    int sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sock < 0) { ESP_LOGE(TAG, "DNS socket 创建失败"); return; }
-    struct sockaddr_in addr = { .sin_family = AF_INET, .sin_port = htons(53), .sin_addr = { .s_addr = htonl(INADDR_ANY) } };
-    if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        ESP_LOGW(TAG, "DNS 端口 53 绑定失败 (可能被占用)");
-        close(sock); return;
-    }
-    uint8_t buf[512];
-    while (1) {
-        struct sockaddr_in from;
-        socklen_t fromlen = sizeof(from);
-        int len = recvfrom(sock, buf, sizeof(buf), 0, (struct sockaddr *)&from, &fromlen);
-        if (len < 12) continue;
-        if ((buf[2] & 0x80) != 0) continue;               /* 不是查询 */
-        uint16_t qcnt = (buf[4] << 8) | buf[5];
-        if (qcnt == 0) continue;
-        /* 构造响应: 复用查询报文, 改标志 + 追加 A 记录 */
-        buf[2] = 0x81; buf[3] = 0x80;                     /* 标准响应 */
-        buf[6] = 0; buf[7] = 0;                           /* Answer RRs */
-        buf[8] = 0; buf[9] = 0;                           /* Authority */
-        buf[10] = 0; buf[11] = 0;                         /* Additional */
-        /* 找到问题区末尾 */
-        int pos = 12;
-        for (int i = 0; i < qcnt; i++) {
-            if (pos >= len) break;
-            while (pos < len && buf[pos] != 0) {
-                pos += buf[pos] + 1;
-            }
-            pos += 5; /* 跳过 \0 + QTYPE + QCLASS */
-        }
-        /* 追加 A 记录 */
-        if (pos + 16 > (int)sizeof(buf)) continue;
-        buf[6] = (qcnt >> 8) & 0xFF; buf[7] = qcnt & 0xFF; /* 回答数 = 问题数 */
-        buf[pos++] = 0xC0; buf[pos++] = 0x0C;             /* 指针到问题名 */
-        buf[pos++] = 0; buf[pos++] = 1;                   /* Type A */
-        buf[pos++] = 0; buf[pos++] = 1;                   /* Class IN */
-        buf[pos++] = 0; buf[pos++] = 0; buf[pos++] = 0; buf[pos++] = 0x3C; /* TTL 60s */
-        buf[pos++] = 0; buf[pos++] = 4;                   /* 数据长度 */
-        buf[pos++] = 192; buf[pos++] = 168; buf[pos++] = 4; buf[pos++] = 1; /* 192.168.4.1 */
-        sendto(sock, buf, pos, 0, (struct sockaddr *)&from, fromlen);
-    }
-    close(sock);
-    vTaskDelete(NULL);
-}
-
 /* 注册路由 */
 static void register_handlers(httpd_handle_t server)
 {
@@ -366,9 +305,7 @@ esp_err_t http_server_init(void)
     esp_err_t err = httpd_start(&s_server, &config);
     if (err == ESP_OK) {
         register_handlers(s_server);
-        httpd_register_err_handler(s_server, HTTPD_404_NOT_FOUND, redirect_404_handler);
-        xTaskCreate(dns_task, "dns_hijack", 3072, NULL, 5, NULL);
-        ESP_LOGI(TAG, "HTTP服务器启动: 端口 80, Captive Portal 已启用");
+        ESP_LOGI(TAG, "HTTP服务器启动: 端口 80");
     } else {
         ESP_LOGE(TAG, "HTTP服务器启动失败: %s", esp_err_to_name(err));
     }
