@@ -380,7 +380,17 @@ document.getElementById('w-pw-eye').addEventListener('click',function(){
 document.getElementById('w-con').addEventListener('click',function(){
   var s=document.getElementById('w-ss').value.trim(),p=document.getElementById('w-pw').value.trim();
   if(!s){toa('输入名称','warning');return;}
-  fetch('/wifi/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ssid:s,password:p})}).then(function(r){return r.json();}).then(function(d){toa(d.ok?'连接中...':'失败','info');setTimeout(fWS,3000);}).catch(function(){});});
+  toa('⏳ 连接 '+s+'...','info');
+  fetch('/wifi/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ssid:s,password:p})}).then(function(r){return r.json();}).then(function(d){
+    if(!d.ok){toa('请求失败','danger');return;}
+    var t=0,ti=setInterval(function(){
+      fetch('/wifi/status').then(function(r){return r.json();}).then(function(st){
+        t++;
+        if(st.connected&&st.station_ssid===s){clearInterval(ti);toa('✅ 已连至 '+s,'success');fWS();}
+        else if(t>15){clearInterval(ti);toa('❌ 连接 '+s+' 超时，请检查密码','danger');fWS();}
+      }).catch(function(){});
+    },1000);
+  }).catch(function(){});});
 document.getElementById('w-scan').addEventListener('click',function(){
   document.getElementById('w-sl').innerHTML='<p style="padding:12px;color:var(--ts)">扫描中...</p>';
   fetch('/wifi/scan').then(function(r){return r.json();}).then(function(d){

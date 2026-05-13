@@ -10,6 +10,8 @@ static const char *TAG = "wifi_manager";
 static char s_sta_ip[16] = "0.0.0.0";
 static char s_connected_ssid[33] = {0};
 static bool s_sta_connected = false;
+static char s_pending_ssid[33] = {0};
+static char s_pending_pwd[65] = {0};
 static esp_netif_t *s_ap_netif = NULL;
 static esp_netif_t *s_sta_netif = NULL;
 
@@ -40,20 +42,34 @@ static void event_handler(void *arg, esp_event_base_t base, int32_t id, void *da
             memset(s_sta_ip, 0, sizeof(s_sta_ip));
             strcpy(s_sta_ip, "0.0.0.0");
             ESP_LOGI(TAG, "STA断开连接, 尝试重连");
-            char ssid[33] = {0};
+            char ssid[33] = {0}, pwd[65] = {0};
             nvs_handle_t h;
             if (nvs_open("wifi_cfg", NVS_READONLY, &h) == ESP_OK) {
                 size_t len = sizeof(ssid);
                 nvs_get_str(h, "sta_ssid", ssid, &len);
+                len = sizeof(pwd);
+                nvs_get_str(h, "sta_pwd", pwd, &len);
                 nvs_close(h);
             }
-            if (strlen(ssid)) esp_wifi_connect();
+            if (strlen(ssid)) {
+                wifi_config_t cfg = {0};
+                strncpy((char *)cfg.sta.ssid, ssid, sizeof(cfg.sta.ssid) - 1);
+                strncpy((char *)cfg.sta.password, pwd, sizeof(cfg.sta.password) - 1);
+                esp_wifi_set_config(WIFI_IF_STA, &cfg);
+                esp_wifi_connect();
+            }
         }
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *ev = (ip_event_got_ip_t *)data;
         esp_ip4addr_ntoa(&ev->ip_info.ip, s_sta_ip, sizeof(s_sta_ip));
         s_sta_connected = true;
         ESP_LOGI(TAG, "STA获取IP: %s", s_sta_ip);
+        /* 连接成功后才保存凭据到NVS */
+        if (strlen(s_pending_ssid)) {
+            save_cred(s_pending_ssid, s_pending_pwd);
+            memset(s_pending_ssid, 0, sizeof(s_pending_ssid));
+            memset(s_pending_pwd, 0, sizeof(s_pending_pwd));
+        }
     }
 }
 
@@ -115,7 +131,8 @@ bool wifi_manager_is_sta_connected(void)
 
 esp_err_t wifi_manager_sta_connect(const char *ssid, const char *password)
 {
-    save_cred(ssid, password);
+    strncpy(s_pending_ssid, ssid, sizeof(s_pending_ssid) - 1);
+    if (password) strncpy(s_pending_pwd, password, sizeof(s_pending_pwd) - 1);
     strncpy(s_connected_ssid, ssid, sizeof(s_connected_ssid) - 1);
     s_sta_connected = false;
 
