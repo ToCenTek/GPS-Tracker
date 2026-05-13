@@ -301,6 +301,7 @@ function fGPS(){fetch('/gps').then(function(r){return r.json();}).then(function(
     if(follow){var z=lmap.getZoom();if(z<16)z=18;lmap.setView([gps.la,gps.lg],z);}}
   // Canvas 首次定位居中 (zoom=0表示未居中过)
   if(!online&&gps.v&&zoom===0){cL=gps.la;cG=gps.lg;zoom=2;}
+  dr();}).catch(function(){});}
 setInterval(fGPS,1000);fGPS();
 
 // ===== 原始NMEA =====
