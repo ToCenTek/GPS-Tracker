@@ -6,18 +6,19 @@
 <title>GPS追踪系统</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
 :root{--p:#1a73e8;--bg:#f5f7fa;--c:#fff;--t:#1a1a2e;--ts:#6b7280;--b:#e5e7eb;--s:#10b981;--w:#f59e0b;--d:#ef4444}
 </style>
 <link rel="stylesheet" href="/leaflet.css?v=2" />
 <style>
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--t);overflow:hidden;height:100vh;width:100vw}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--t);overflow:hidden;height:100%;margin:0}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:10px 20px;border:none;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;transition:.15s;white-space:nowrap}
 .btn:active{transform:scale(.95)}.btn-primary{background:var(--p);color:#fff}.btn-success{background:var(--s);color:#fff}.btn-danger{background:var(--d);color:#fff}
 .btn-outline{background:transparent;border:1.5px solid var(--b);color:var(--t)}.btn-sm{padding:6px 14px;font-size:12px}
 #sb{position:fixed;top:0;left:0;right:0;z-index:1000;background:var(--c);padding:8px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--b);height:48px;font-size:13px}
 .si{display:flex;align-items:center;gap:4px;color:var(--ts)}.si .dot{width:8px;height:8px;border-radius:50%}.dg{background:var(--s)}.dr{background:var(--d)}.si .v{color:var(--t);font-weight:600}
-#map{position:fixed;top:48px;left:0;right:0;bottom:0;z-index:1;height:calc(100vh - 48px)}
-#cv{position:fixed;top:48px;left:0;right:0;bottom:0;z-index:1;width:100%;height:calc(100vh - 48px);touch-action:none}
+#map{position:fixed;top:48px;left:0;right:0;bottom:0;z-index:1}
+#cv{position:fixed;top:48px;left:0;right:0;bottom:0;z-index:1;touch-action:none}
 .leaflet-control-zoom a{background:var(--c)!important;color:var(--t)!important;border-color:var(--b)!important}
 #bp{position:fixed;left:0;right:0;bottom:0;z-index:999;background:var(--c);border-radius:16px 16px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,.1);transition:transform .3s;max-height:48vh;display:flex;flex-direction:column}
 #bp.min{transform:translateY(calc(100% - 52px))}
@@ -109,6 +110,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
         <div class="bg"><button class="btn btn-sm btn-primary" id="w-con">连接</button><button class="btn btn-sm btn-outline" id="w-scan">📡扫描</button></div>
 </div>
 <div id="c-hint" style="position:fixed;bottom:60px;left:50%;transform:translateX(-50%);z-index:101;padding:4px 12px;border-radius:6px;background:rgba(0,0,0,.7);color:#fff;font-size:12px;pointer-events:none;opacity:0;transition:opacity .2s"></div>
+<div id="sta-banner" style="display:none;position:fixed;top:48px;left:0;right:0;z-index:102;padding:8px 12px;background:#e8f0fe;border-bottom:1px solid var(--p);font-size:12px;color:var(--t);line-height:1.5;box-shadow:0 2px 8px rgba(0,0,0,.1)"></div>
       <div id="w-sl"></div>
       <p style="font-size:12px;color:var(--ts);margin-top:8px" id="w-st">状态:--</p>
       <div id="w-gd" style="display:none;margin-top:10px;padding:12px;background:#e8f0fe;border-radius:10px;font-size:13px"><span id="w-gd-text"></span></div>
@@ -366,7 +368,12 @@ function fWS(){fetch('/wifi/status').then(function(r){return r.json();}).then(fu
   document.getElementById('w-st').textContent=d.connected?'':'未接入任何热点，无法加载地图！';
   document.getElementById('wfb').textContent=d.connected?'Station':'SoftAP';
   var g=document.getElementById('w-gd');
-  if(d.connected){document.getElementById('w-gd-text').innerHTML='📶 Station 已连至 '+d.station_ssid+'，访问设备切换到该热点。<br><span style="padding-left:24px">API 访问地址已变更为：<a href="http://'+d.station+'" style="color:var(--p);font-weight:600;text-decoration:underline">http://'+d.station+'</a></span>';g.style.display='block';}else{g.style.display='none';}}).catch(function(){});}
+  var b=document.getElementById('sta-banner');
+  if(d.connected){
+    var html='📶 Station 已连至 '+d.station_ssid+'，访问设备切换到该热点。<br>　　API 访问地址已变更为：<a href="http://'+d.station+'" style="color:var(--p);font-weight:600;text-decoration:underline">http://'+d.station+'</a>';
+    document.getElementById('w-gd-text').innerHTML=html;g.style.display='block';
+    b.innerHTML=html;b.style.display='block';
+  }else{g.style.display='none';b.style.display='none';}}).catch(function(){});}
 document.getElementById('w-pw-eye').addEventListener('click',function(){
   var pw=document.getElementById('w-pw');var eye=document.getElementById('w-pw-eye');
   if(pw.type==='password'){pw.type='text';eye.textContent='👁️';}else{pw.type='password';eye.textContent='🙈';}});

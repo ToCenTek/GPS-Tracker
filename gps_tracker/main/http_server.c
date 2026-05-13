@@ -264,7 +264,7 @@ static esp_err_t redirect_404_handler(httpd_req_t *req, httpd_err_code_t err)
 {
     (void)err;
     httpd_resp_set_status(req, "302 Found");
-    httpd_resp_set_hdr(req, "Location", "/");
+    httpd_resp_set_hdr(req, "Location", "http://192.168.4.1/");
     httpd_resp_send(req, NULL, 0);
     return ESP_OK;
 }
