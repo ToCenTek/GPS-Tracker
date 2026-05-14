@@ -109,6 +109,10 @@ static void parse_gga(const char *line, gps_data_t *data)
             char *v = p + 1;
             char *end = strchr(v, ',');
             if (end) { *end = 0; data->satellites = atoi(v); }
+        } else if (field == 8) { /* HDOP */
+            char *v = p + 1;
+            char *end = strchr(v, ',');
+            if (end) { *end = 0; data->hdop = atof(v); }
         } else if (field == 9) { /* 海拔 */
             char *v = p + 1;
             char *end = strchr(v, ',');

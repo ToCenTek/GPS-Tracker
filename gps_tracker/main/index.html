@@ -82,19 +82,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
   <div id="pc">
     <div class="tc act" id="tp-pos"><h3>实时位置</h3><div class="ig">
       <div class="ii"><div class="l">北京时间</div><div class="v" id="p-bj">--</div></div>
-      <div class="ii"><div class="l">状态</div><div class="v" id="p-st">--</div></div>
+      <div class="ii"><div class="l">网格</div><div class="v" id="p-gid">0</div></div>
       <div class="ii"><div class="l">纬度</div><div class="v" id="p-la">--</div></div>
       <div class="ii"><div class="l">经度</div><div class="v" id="p-lo">--</div></div>
-      <div class="ii"><div class="l">速度(节)</div><div class="v" id="p-sk">--</div></div>
-      <div class="ii"><div class="l">航向</div><div class="v" id="p-cr">-- <span class="u">°</span></div></div>
-      <div class="ii"><div class="l">日期</div><div class="v" id="p-da">--</div></div>
-      <div class="ii"><div class="l">磁偏角</div><div class="v" id="p-mv">-- <span class="u">°</span></div></div>
+      <div class="ii"><div class="l">卫星</div><div class="v" id="p-sat">0</div></div>
       <div class="ii"><div class="l">模式</div><div class="v" id="p-mod">--</div></div>
-      <div class="ii"><div class="l">海拔</div><div class="v" id="p-al">-- <span class="u">m</span></div></div>
+      <div class="ii"><div class="l">航向</div><div class="v" id="p-cr">-- <span class="u">°</span></div></div>
+      <div class="ii"><div class="l">速度(kn)</div><div class="v" id="p-sk">--</div></div>
       <div class="ii"><div class="l">km/h</div><div class="v" id="p-skm">--</div></div>
       <div class="ii"><div class="l">m/s</div><div class="v" id="p-smh">--</div></div>
-      <div class="ii"><div class="l">卫星</div><div class="v" id="p-sat">0</div></div>
-      <div class="ii"><div class="l">网格</div><div class="v" id="p-gid">0</div></div>
+      <div class="ii"><div class="l">HDOP</div><div class="v" id="p-hdop">--</div></div>
+      <div class="ii"><div class="l">海拔</div><div class="v" id="p-al">-- <span class="u">m</span></div></div>
     </div></div>
     <div class="tc" id="tp-trk"><h3>记录轨迹</h3><div class="bg">
       <button class="btn btn-success" id="trk-s">▶开始</button>
@@ -161,7 +159,7 @@ function wgs84_to_gcj02(lat,lng){
 // ===== Leaflet 地图 (在线/离线统一) =====
 var follow=true, headingUp=false;
 var gps={la:30.2943,lg:120.1663,v:false,course:0,scourse:0,speed:0},trk=[],recTrk=[],reg=[],cel=[];
-var lmap=L.map('map',{center:[30.2943,120.1663],zoom:16,maxZoom:22,zoomControl:false});
+var lmap=L.map('map',{center:[30.2943,120.1663],zoom:16,maxZoom:22});
 L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',{subdomains:['1','2','3','4'],maxZoom:22,maxNativeZoom:18}).addTo(lmap);
 lmap.invalidateSize();
 leafGps=L.marker([30.2943,120.1663],{icon:L.divIcon({className:'',
@@ -257,25 +255,22 @@ function fGPS(){fetch('/gps').then(function(r){return r.json();}).then(function(
   document.getElementById('gps-dot').className='dot '+(f?'dg':'dr');
   document.getElementById('sat-n').textContent=d.satellites||0;
   document.getElementById('gid-n').textContent=d.grid||'0';
-  document.getElementById('gps-ll').innerHTML=f?d.latitude+',<br>'+d.longitude:'--';
   function ftm(t){return t&&t.length>=6?t.substr(0,2)+':'+t.substr(2,2)+':'+t.substr(4,2):'--';}
   function fdt(d){return d&&d.length>=6?'20'+d.substr(4,2)+'-'+d.substr(2,2)+'-'+d.substr(0,2):'--';}
-  document.getElementById('p-bj').textContent=ftm(d.bj_time);
-  document.getElementById('p-da').textContent=fdt(d.date)+' '+ftm(d.bj_time);
-  document.getElementById('p-st').textContent=f?'有效':'无效';
+  document.getElementById('p-bj').innerHTML=f?fdt(d.date)+' '+ftm(d.bj_time):'--';
+  document.getElementById('p-gid').textContent=d.grid||'0';
   document.getElementById('p-la').textContent=f?d.latitude:'--';
   document.getElementById('p-lo').textContent=f?d.longitude:'--';
-  document.getElementById('p-sk').textContent=f?(d.speed_knots||0).toFixed(2):'--';
-  document.getElementById('p-cr').innerHTML=f?((d.course||0).toFixed(1)+' <span class="u">°</span>'):'--';
-  document.getElementById('p-da').textContent=d.date||'--';
-  document.getElementById('p-mv').innerHTML=(d.magnetic_variation||'--')+' <span class="u">°</span>';
-  document.getElementById('p-mod').textContent=f?(d.status+(d.status=='A'?'自主':d.status=='D'?'差分':d.status=='E'?'估算':d.status=='M'?'手动':d.status=='S'?'模拟':'无效')):'--';
-  document.getElementById('p-al').innerHTML=f?((d.altitude||0).toFixed(1)+' <span class="u">m</span>'):'--';
-  document.getElementById('p-skm').textContent=f?(d.speed_kmh||0).toFixed(2):'--';
-  document.getElementById('p-smh').textContent=f?(d.speed_ms||0).toFixed(2):'--';
   document.getElementById('p-sat').textContent=d.satellites||0;
-  document.getElementById('p-gid').textContent=d.grid||'0';
+  document.getElementById('p-mod').textContent=f?(d.status+(d.status=='A'?'自主':d.status=='D'?'差分':d.status=='E'?'估算':d.status=='M'?'手动':d.status=='S'?'模拟':'无效')):'--';
+  document.getElementById('p-cr').innerHTML=f?((d.course||0).toFixed(1)+' <span class="u">°</span>'):'--';
+  document.getElementById('p-sk').textContent=f?(d.speed_knots||0).toFixed(3):'--';
+  document.getElementById('p-skm').textContent=f?(d.speed_kmh||0).toFixed(3):'--';
+  document.getElementById('p-smh').textContent=f?(d.speed_ms||0).toFixed(3):'--';
+  document.getElementById('p-hdop').textContent=(d.hdop||0).toFixed(1);
+  document.getElementById('p-al').innerHTML=f?((d.altitude||0).toFixed(2)+' <span class="u">m</span>'):'--';
   document.getElementById('tb-gid').textContent='📦 '+(d.grid||'0');
+  document.getElementById('gps-ll').innerHTML=f?d.latitude+',<br>'+d.longitude:'--';
   if(follow)centerGPS();
   }catch(e){}}).catch(function(){}).then(function(){setTimeout(fGPS,1000);});}
 fGPS();

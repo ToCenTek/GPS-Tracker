@@ -51,7 +51,8 @@ static void build_gps_json(char *buf, size_t len)
         "  \"course\":%.1f,\n"
         "  \"date\":\"%s\",\n"
         "  \"magnetic_variation\":\"%s\",\n"
-        "  \"altitude\":%.1f,\n"
+        "  \"altitude\":%.2f,\n"
+        "  \"hdop\":%.1f,\n"
         "  \"satellites\":%d,\n"
         "  \"grid\":\"%s\"\n"
         "}",
@@ -66,6 +67,7 @@ static void build_gps_json(char *buf, size_t len)
         gps.date,
         mag_str,
         gps.altitude,
+        gps.hdop,
         gps.satellites,
         grid_id);
 }

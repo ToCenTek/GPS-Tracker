@@ -20,6 +20,7 @@ typedef struct {
     char mode;                  /* A/D/E/M/S/N */
     /* 额外字段（非RMC） */
     double altitude;            /* 海拔 (米) */
+    double hdop;                /* 水平精度因子 */
     double speed_kmh;           /* 速度 (km/h) */
     double speed_ms;            /* 速度 (m/s) */
     int satellites;             /* 卫星数量 */

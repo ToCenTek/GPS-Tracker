@@ -343,9 +343,9 @@ void oled_update(const gps_data_t *gps, const char *grid_id, const char *wifi_mo
 
     /* 第6行 y=56: 速度 + 海拔 */
     if (gps && gps->status == 'A') {
-        snprintf(buf, sizeof(buf), "%.1fkmh %.0fm", gps->speed_kmh, gps->altitude);
+        snprintf(buf, sizeof(buf), "%.2fkn %.2fkmh %.2fms %.2fm", gps->speed_knots, gps->speed_kmh, gps->speed_ms, gps->altitude);
     } else {
-        snprintf(buf, sizeof(buf), "--kmh --m");
+        snprintf(buf, sizeof(buf), "--kn --kmh --ms --m");
     }
     fb_str(0, 56, buf, 1);
 
