@@ -102,22 +102,15 @@ static void parse_gga(const char *line, gps_data_t *data)
     if (strstr(line, "GGA") == NULL) return;
     char buf[256];
     strncpy(buf, line, sizeof(buf) - 1);
-    data->satellites = 0; data->hdop = 0; data->altitude = 0;
     int field = 0;
     for (char *p = buf; p && *p; p = strchr(p + 1, ',')) {
         field++;
         if (field == 8) { /* 卫星数 */
-            char *v = p + 1;
-            char *end = strchr(v, ',');
-            if (end) { *end = 0; data->satellites = atoi(v); }
+            if (sscanf(p + 1, "%d", &data->satellites) != 1) data->satellites = 0;
         } else if (field == 9) { /* HDOP */
-            char *v = p + 1;
-            char *end = strchr(v, ',');
-            if (end) { *end = 0; data->hdop = atof(v); }
+            double v; if (sscanf(p + 1, "%lf", &v) == 1) data->hdop = v;
         } else if (field == 10) { /* 海拔 */
-            char *v = p + 1;
-            char *end = strchr(v, ',');
-            if (end) { *end = 0; data->altitude = atof(v); }
+            double v; if (sscanf(p + 1, "%lf", &v) == 1) data->altitude = v;
         }
     }
 }
