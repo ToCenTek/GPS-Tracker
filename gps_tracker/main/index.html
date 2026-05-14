@@ -259,8 +259,8 @@ function fGPS(){fetch('/gps').then(function(r){return r.json();}).then(function(
   function fdt(d){return d&&d.length>=6?'20'+d.substr(4,2)+'-'+d.substr(2,2)+'-'+d.substr(0,2):'--';}
   document.getElementById('p-bj').innerHTML=f?fdt(d.date)+' '+ftm(d.bj_time):'--';
   document.getElementById('p-gid').textContent=d.grid||'0';
-  document.getElementById('p-la').textContent=f?(d.latitude.match(/([NS])\s*([\d.]+)/)?RegExp.$1+' '+RegExp.$2:'--'):'--';
-  document.getElementById('p-lo').textContent=f?(d.longitude.match(/([EW])\s*([\d.]+)/)?RegExp.$1+' '+RegExp.$2:'--'):'--';
+  document.getElementById('p-la').textContent=f?(d.latitude.replace(/^([\d.]+)\s*([NS])$/,'$2 $1')):'--';
+  document.getElementById('p-lo').textContent=f?(d.longitude.replace(/^([\d.]+)\s*([EW])$/,'$2 $1')):'--';
   document.getElementById('p-sat').textContent=d.satellites||0;
   document.getElementById('p-mod').textContent=f?(d.status+' '+(d.status=='A'?'自主':d.status=='D'?'差分':d.status=='E'?'估算':d.status=='M'?'手动':d.status=='S'?'模拟':'无效')):'--';
   document.getElementById('p-cr').innerHTML=f?((d.course||0).toFixed(1)+' <span class="u">°</span>'):'--';
@@ -270,8 +270,7 @@ function fGPS(){fetch('/gps').then(function(r){return r.json();}).then(function(
   document.getElementById('p-hdop').textContent=(d.hdop||0).toFixed(1);
   document.getElementById('p-al').innerHTML=f?((d.altitude||0).toFixed(2)+' <span class="u">m</span>'):'--';
   document.getElementById('tb-gid').textContent='📦 '+(d.grid||'0');
-  var la=d.latitude.match(/([NS])\s*([\d.]+)/),lo=d.longitude.match(/([EW])\s*([\d.]+)/);
-  document.getElementById('gps-ll').innerHTML=f&&la&&lo?la[1]+' '+la[2]+',<br>'+lo[1]+' '+lo[2]:'--';
+  document.getElementById('gps-ll').innerHTML=f?d.latitude.replace(/^([\d.]+)\s*([NS])$/,'$2 $1')+',<br>'+d.longitude.replace(/^([\d.]+)\s*([EW])$/,'$2 $1'):'--';
   if(follow)centerGPS();
   }catch(e){}}).catch(function(){}).then(function(){setTimeout(fGPS,1000);});}
 fGPS();

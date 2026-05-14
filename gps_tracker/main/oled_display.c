@@ -242,7 +242,7 @@ void oled_coldstart(void)
 
     /* 30秒后: 黑底白字数据展示 */
     fb_clr();
-    char buf[28];
+    char buf[36];
 
     int sim_h = (total_s / 3600) % 24;
     int sim_m = (total_s / 60) % 60;
@@ -298,7 +298,7 @@ void oled_update(const gps_data_t *gps, const char *grid_id, const char *wifi_mo
 
     /* 30秒后: 真实GPS数据展示 */
     fb_clr();
-    char buf[28];
+    char buf[36];
 
     /* 第1行: WiFi IP(变长)        定位模式 卫星数(固定位) */
     const char *sta_ip = wifi_manager_get_sta_ip();
@@ -323,12 +323,11 @@ void oled_update(const gps_data_t *gps, const char *grid_id, const char *wifi_mo
     }
     if (last_tick) {
         int elapsed = (int)(now_ms - last_tick) / 1000;
-        int s = last_s + elapsed;
-        int m = last_m; int h = last_h;
-        while (s >= 60) { s -= 60; m++; }
-        while (m >= 60) { m -= 60; h++; }
-        h %= 24;
-        snprintf(buf, sizeof(buf), "%02d-%02d-%02d %02d:%02d:%02d", last_y+2000, last_mo, last_d, h, m, s);
+        unsigned char ss = last_s + elapsed, mm = last_m, hh = last_h;
+        while (ss >= 60) { ss -= 60; mm++; }
+        while (mm >= 60) { mm -= 60; hh++; }
+        hh %= 24;
+        snprintf(buf, sizeof(buf), "%02d-%02u-%02u %02u:%02u:%02u", last_y+2000, (unsigned char)last_mo, (unsigned char)last_d, hh, mm, ss);
     } else {
         snprintf(buf, sizeof(buf), "----/--/-- --:--:--");
     }
