@@ -33,7 +33,7 @@ static void build_gps_json(char *buf, size_t len)
         gps_parser_set_grid(grid_id);
     }
 
-    char lat_str[32], lng_str[32], mag_str[16];
+    char lat_str[32], lng_str[32];
     double lat_abs = gps.latitude < 0 ? -gps.latitude : gps.latitude;
     double lng_abs = gps.longitude < 0 ? -gps.longitude : gps.longitude;
     snprintf(lat_str, sizeof(lat_str), "%c %.6f", gps.latitude_ns ? gps.latitude_ns : 'N', lat_abs);
@@ -52,7 +52,6 @@ static void build_gps_json(char *buf, size_t len)
         "  \"speed_ms\":%.4f,\n"
         "  \"course\":%.1f,\n"
         "  \"date\":\"%s\",\n"
-        "  \"magnetic_variation\":\"%s\",\n"
         "  \"altitude\":%.2f,\n"
         "  \"hdop\":%.1f,\n"
         "  \"satellites\":%d,\n"
@@ -67,7 +66,6 @@ static void build_gps_json(char *buf, size_t len)
         gps.speed_ms,
         gps.course,
         gps.date,
-        mag_str,
         gps.altitude,
         gps.hdop,
         gps.satellites,

@@ -59,7 +59,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
   <div class="si"><span class="dot dr" id="gps-dot"></span><span id="gps-st" style="display:none">等待</span></div>
   <div class="si">🛰 <span class="v" id="sat-n">0</span></div>
   <div class="si"><svg width="14" height="14" viewBox="0 0 16 16" style="vertical-align:middle;margin-right:2px"><rect x="1" y="1" width="14" height="14" fill="none" stroke="var(--ts)" stroke-width="2.5"/><line x1="5.5" y1="1" x2="5.5" y2="15" stroke="var(--ts)" stroke-width=".8"/><line x1="10.5" y1="1" x2="10.5" y2="15" stroke="var(--ts)" stroke-width=".8"/><line x1="1" y1="5.5" x2="15" y2="5.5" stroke="var(--ts)" stroke-width=".8"/><line x1="1" y1="10.5" x2="15" y2="10.5" stroke="var(--ts)" stroke-width=".8"/></svg><span class="v" id="gid-n">0</span></div>
-  <span style="display:none;font-size:12px;font-weight:700;color:var(--d);flex-shrink:0" id="rec-ind">●录制中</span>
+  <span style="display:none;font-size:12px;font-weight:700;color:var(--d);flex-shrink:0" id="rec-ind">●录制</span>
   <div id="sb-center" style="position:absolute;left:50%;transform:translateX(calc(-50% - 16px));display:flex;gap:4px;align-items:center">
     <button class="tb-btn" id="btn-center" title="回位置" style="width:36px;height:36px;padding:0;border:none;border-radius:8px;background:transparent;color:var(--ts);font-size:20px;cursor:pointer;line-height:1">📍</button>
     <button class="tb-btn" id="btn-north" title="航向指北" style="flex-shrink:0;width:34px;height:34px;padding:0;border:none;border-radius:8px;display:flex;align-items:center;justify-content:center;background:transparent"><svg width="24" height="24" viewBox="-12 -12 24 24"><circle cx="0" cy="0" r="10" fill="none" stroke="var(--ts)" stroke-width="2"/><polygon id="north-arrow" points="0,-8 -3,4 0,1 3,4" fill="var(--ts)"/></svg></button>
@@ -177,7 +177,7 @@ var stRec='idle';
 function recShow(){
   document.getElementById('trk-i').textContent='轨迹:'+recTrk.length;
   document.getElementById('rec-ind').style.display=stRec!='idle'?'inline':'none';
-  document.getElementById('rec-ind').textContent=stRec=='rec'?'●录制中':'⏸已暂停';
+  document.getElementById('rec-ind').textContent=stRec=='rec'?'●录制':'⏸已暂停';
   document.getElementById('rec-ind').style.color=stRec=='rec'?'var(--d)':'var(--w)';
   document.getElementById('trk-s').textContent=stRec=='rec'?'⏸暂停':'▶开始';
   document.getElementById('trk-s').className=stRec=='rec'?'btn btn-warning':'btn btn-success';
@@ -248,7 +248,7 @@ function fGPS(){fetch('/gps').then(function(r){return r.json();}).then(function(
   var latNum=parseFloat(d.latitude.replace(/[^\d.-]/g,'')),lngNum=parseFloat(d.longitude.replace(/[^\d.-]/g,''));
   var f=(d.status=='A'||d.status=='D'||d.status=='E'||d.status=='M')&&!isNaN(latNum)&&latNum!==0;
   gps.v=f;if(f){gps.la=latNum;gps.lg=lngNum;gps.course=d.course;gps.speed=d.speed_kmh||0;}
-  try{var la=d.latitude.split(' '),lo=d.longitude.split(' ');document.getElementById('gps-ll').innerHTML=f?la[1]+' '+la[0]+'<br>'+lo[1]+' '+lo[0]:'--';}catch(e){}
+  try{document.getElementById('gps-ll').innerHTML=f?d.latitude+'<br>'+d.longitude:'--';}catch(e){}
   if(gps.v&&lmap){var gcj=wgs84_to_gcj02(gps.la,gps.lg);leafGps.setLatLng([gcj.lat,gcj.lng]);var e=leafGps.getElement();if(e){var svg=e.querySelector('svg');if(svg){svg.style.transform=headingUp?'rotate(0deg)':'rotate('+gps.course+'deg)';var c=svg.querySelector('circle');if(c)c.setAttribute('fill',stRec=='rec'?'rgba(230,126,34,.85)':'rgba(26,115,232,.85)');}}}
   trk.push([gps.la,gps.lg]);if(leafTrack)leafTrack.setLatLngs(trk.map(function(p){var g=wgs84_to_gcj02(p[0],p[1]);return [g.lat,g.lng];}));
   if(stRec=='rec'){recTrk.push([gps.la,gps.lg]);if(leafRecTrack)leafRecTrack.setLatLngs(recTrk.map(function(p){var g=wgs84_to_gcj02(p[0],p[1]);return [g.lat,g.lng];}));}
