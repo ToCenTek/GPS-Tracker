@@ -58,7 +58,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 <div id="sb">
   <div class="si"><span class="dot dr" id="gps-dot"></span><span id="gps-st" style="display:none">等待</span></div>
   <div class="si">🛰 <span class="v" id="sat-n">0</span></div>
-  <div class="si">📦 <span class="v" id="gid-n">0</span></div>
+  <div class="si">🔲 <span class="v" id="gid-n">0</span></div>
   <span style="display:none;font-size:12px;font-weight:700;color:var(--d);flex-shrink:0" id="rec-ind">●录制中</span>
   <div id="sb-center" style="position:absolute;left:50%;transform:translateX(calc(-50% - 16px));display:flex;gap:4px;align-items:center">
     <button class="tb-btn" id="btn-center" title="回位置" style="width:36px;height:36px;padding:0;border:none;border-radius:8px;background:transparent;color:var(--ts);font-size:20px;cursor:pointer;line-height:1">📍</button>
@@ -224,11 +224,11 @@ document.getElementById('g-gen').addEventListener('click',function(){
       lmap.on('zoomend',function(){leafGrid.eachLayer(function(l){if(lmap.getZoom()<15)l.closeTooltip();else l.openTooltip();});});}
   }).catch(function(){});
 });
-document.getElementById('g-del').addEventListener('click',function(){cel=[];if(leafGrid){lmap.removeLayer(leafGrid);leafGrid=null;}document.getElementById('tb-gid').textContent='📦 0';toa('清除','info');;});
+document.getElementById('g-del').addEventListener('click',function(){cel=[];if(leafGrid){lmap.removeLayer(leafGrid);leafGrid=null;}document.getElementById('tb-gid').textContent='🔲 0';toa('清除','info');;});
 
 // ===== 页面加载时读取网格数据 =====
 fetch('/grid').then(function(r){return r.json();}).then(function(d){
-  document.getElementById('tb-gid').textContent='📦 '+(d.grid||'0');
+  document.getElementById('tb-gid').textContent='🔲 '+(d.grid||'0');
 }).catch(function(){});
 fetch('/grid/data').then(function(r){return r.json();}).then(function(d){
   if(d.grids&&d.grids.length){cel=d.grids.slice(0,500);
@@ -268,8 +268,8 @@ function fGPS(){fetch('/gps').then(function(r){return r.json();}).then(function(
   document.getElementById('p-smh').textContent=f?(d.speed_ms||0).toFixed(3):'--';
   document.getElementById('p-hdop').textContent=(d.hdop||0).toFixed(1);
   document.getElementById('p-al').innerHTML=f?((d.altitude||0).toFixed(2)+' <span class="u">m</span>'):'--';
-  document.getElementById('tb-gid').textContent='📦 '+(d.grid||'0');
-  document.getElementById('gps-ll').innerHTML=f?((d.latitude.split(' ')[1]||'N')+' '+d.latitude.split(' ')[0]+'<br>'+(d.longitude.split(' ')[1]||'E')+' '+d.longitude.split(' ')[0]):'--';
+  document.getElementById('tb-gid').textContent='🔲 '+(d.grid||'0');
+  document.getElementById('gps-ll').innerHTML=f?d.latitude+'<br>'+d.longitude:'--';
   if(follow)centerGPS();
   }catch(e){}}).catch(function(){}).then(function(){setTimeout(fGPS,1000);});}
 fGPS();
