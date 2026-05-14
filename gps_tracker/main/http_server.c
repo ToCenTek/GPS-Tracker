@@ -38,12 +38,21 @@ static void build_gps_json(char *buf, size_t len)
     double lng_abs = gps.longitude < 0 ? -gps.longitude : gps.longitude;
     snprintf(lat_str, sizeof(lat_str), "%c %.6f", gps.latitude_ns ? gps.latitude_ns : 'N', lat_abs);
     snprintf(lng_str, sizeof(lng_str), "%c %.6f", gps.longitude_ew ? gps.longitude_ew : 'E', lng_abs);
-    snprintf(mag_str, sizeof(mag_str), "%.1f %c", gps.magnetic_variation, gps.magnetic_variation_dir ? gps.magnetic_variation_dir : 'E');
+    char bj_time_fmt[16], date_fmt[16];
+    if (strlen(gps.bj_time) >= 6) {
+        int h, m, s; sscanf(gps.bj_time, "%2d%2d%2d", &h, &m, &s);
+        snprintf(bj_time_fmt, sizeof(bj_time_fmt), "%02d:%02d:%02d", h, m, s);
+    } else strncpy(bj_time_fmt, gps.bj_time, sizeof(bj_time_fmt));
+    if (strlen(gps.date) >= 6) {
+        int d, mo, y; sscanf(gps.date, "%2d%2d%2d", &d, &mo, &y);
+        snprintf(date_fmt, sizeof(date_fmt), "20%02d-%02d-%02d", y, mo, d);
+    } else strncpy(date_fmt, gps.date, sizeof(date_fmt));
 
     char st = gps.mode ? gps.mode : (gps.status == 'A' ? 'A' : 'N');
     snprintf(buf, len,
         "{\n"
         "  \"bj_time\":\"%s\",\n"
+        "  \"date\":\"%s\",\n"
         "  \"status\":\"%c\",\n"
         "  \"latitude\":\"%s\",\n"
         "  \"longitude\":\"%s\",\n"
@@ -51,13 +60,13 @@ static void build_gps_json(char *buf, size_t len)
         "  \"speed_kmh\":%.4f,\n"
         "  \"speed_ms\":%.4f,\n"
         "  \"course\":%.1f,\n"
-        "  \"date\":\"%s\",\n"
         "  \"altitude\":%.2f,\n"
         "  \"hdop\":%.1f,\n"
         "  \"satellites\":%d,\n"
         "  \"grid\":\"%s\"\n"
         "}",
-        gps.bj_time,
+        bj_time_fmt,
+        date_fmt,
         st,
         lat_str,
         lng_str,
@@ -65,7 +74,6 @@ static void build_gps_json(char *buf, size_t len)
         gps.speed_kmh,
         gps.speed_ms,
         gps.course,
-        gps.date,
         gps.altitude,
         gps.hdop,
         gps.satellites,
