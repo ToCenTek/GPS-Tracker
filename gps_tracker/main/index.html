@@ -269,7 +269,7 @@ function fGPS(){fetch('/gps').then(function(r){return r.json();}).then(function(
   document.getElementById('p-hdop').textContent=(d.hdop||0).toFixed(1);
   document.getElementById('p-al').innerHTML=f?((d.altitude||0).toFixed(2)+' <span class="u">m</span>'):'--';
   document.getElementById('tb-gid').textContent='📦 '+(d.grid||'0');
-  document.getElementById('gps-ll').innerHTML=f?d.latitude.replace(/^([\d.]+)\s*([NS])$/,'$2 $1')+',<br>'+d.longitude.replace(/^([\d.]+)\s*([EW])$/,'$2 $1'):'--';
+  var la=f?d.latitude.split(' '):['--'];document.getElementById('gps-ll').innerHTML=f?la[1]+' '+la[0]+'<br>'+d.longitude.split(' ')[1]+' '+d.longitude.split(' ')[0]:'--';
   if(follow)centerGPS();
   }catch(e){}}).catch(function(){}).then(function(){setTimeout(fGPS,1000);});}
 fGPS();
