@@ -245,8 +245,9 @@ fetch('/grid/data').then(function(r){return r.json();}).then(function(d){
 // ===== GPS =====
 function fGPS(){fetch('/gps').then(function(r){return r.json();}).then(function(d){
   try{
-  var f=(d.status=='A'||d.status=='D'||d.status=='E'||d.status=='M')&&parseFloat(d.latitude)!==0;
-  gps.v=f;if(f){gps.la=parseFloat(d.latitude);gps.lg=parseFloat(d.longitude);gps.course=d.course;gps.speed=d.speed_kmh||0;}
+  var latNum=parseFloat(d.latitude.replace(/[^\d.-]/g,'')),lngNum=parseFloat(d.longitude.replace(/[^\d.-]/g,''));
+  var f=(d.status=='A'||d.status=='D'||d.status=='E'||d.status=='M')&&!isNaN(latNum)&&latNum!==0;
+  gps.v=f;if(f){gps.la=latNum;gps.lg=lngNum;gps.course=d.course;gps.speed=d.speed_kmh||0;}
   try{var la=d.latitude.split(' '),lo=d.longitude.split(' ');document.getElementById('gps-ll').innerHTML=f?la[1]+' '+la[0]+'<br>'+lo[1]+' '+lo[0]:'--';}catch(e){}
   if(gps.v&&lmap){var gcj=wgs84_to_gcj02(gps.la,gps.lg);leafGps.setLatLng([gcj.lat,gcj.lng]);var e=leafGps.getElement();if(e){var svg=e.querySelector('svg');if(svg){svg.style.transform=headingUp?'rotate(0deg)':'rotate('+gps.course+'deg)';var c=svg.querySelector('circle');if(c)c.setAttribute('fill',stRec=='rec'?'rgba(230,126,34,.85)':'rgba(26,115,232,.85)');}}}
   trk.push([gps.la,gps.lg]);if(leafTrack)leafTrack.setLatLngs(trk.map(function(p){var g=wgs84_to_gcj02(p[0],p[1]);return [g.lat,g.lng];}));
