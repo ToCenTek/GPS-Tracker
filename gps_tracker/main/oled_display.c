@@ -312,13 +312,23 @@ void oled_update(const gps_data_t *gps, const char *grid_id, const char *wifi_mo
     snprintf(buf, sizeof(buf), "%02d", gps ? gps->satellites : 0);
     fb_str(116, 0, buf, 1);
 
-    /* 第2行 y=12: 年月日 时分秒 */
+    /* 第2行 y=12: 年月日 时分秒 (秒数按运行时间平滑递增) */
+    static int last_h=0,last_m=0,last_s=0,last_d=0,last_mo=0,last_y=0;
+    static uint32_t last_tick=0;
     if (gps && strlen(gps->bj_time) > 0) {
         int h, m, s, d=0, mo=0, y=0;
-        char t[16];
         sscanf(gps->bj_time, "%2d%2d%2d", &h, &m, &s);
         if (strlen(gps->date) >= 6) sscanf(gps->date, "%2d%2d%2d", &d, &mo, &y);
-        snprintf(buf, sizeof(buf), "%02d-%02d-%02d %02d:%02d:%02d", y+2000, mo, d, h, m, s);
+        last_h=h;last_m=m;last_s=s;last_d=d;last_mo=mo;last_y=y;last_tick=now_ms;
+    }
+    if (last_tick) {
+        int elapsed = (int)(now_ms - last_tick) / 1000;
+        int s = last_s + elapsed;
+        int m = last_m; int h = last_h;
+        while (s >= 60) { s -= 60; m++; }
+        while (m >= 60) { m -= 60; h++; }
+        h %= 24;
+        snprintf(buf, sizeof(buf), "%02d-%02d-%02d %02d:%02d:%02d", last_y+2000, last_mo, last_d, h, m, s);
     } else {
         snprintf(buf, sizeof(buf), "----/--/-- --:--:--");
     }
