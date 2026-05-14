@@ -264,9 +264,9 @@ function fGPS(){fetch('/gps').then(function(r){return r.json();}).then(function(
   document.getElementById('p-sat').textContent=d.satellites||0;
   document.getElementById('p-mod').textContent=f?(d.status+' '+(d.status=='A'?'自主':d.status=='D'?'差分':d.status=='E'?'估算':d.status=='M'?'手动':d.status=='S'?'模拟':'无效')):'--';
   document.getElementById('p-cr').innerHTML=f?((d.course||0).toFixed(1)+' <span class="u">°</span>'):'--';
-  document.getElementById('p-sk').textContent=f?(d.speed_knots||0).toFixed(3):'--';
-  document.getElementById('p-skm').textContent=f?(d.speed_kmh||0).toFixed(3):'--';
-  document.getElementById('p-smh').textContent=f?(d.speed_ms||0).toFixed(3):'--';
+  document.getElementById('p-sk').textContent=f?(d.speed_knots||0).toFixed(4):'--';
+  document.getElementById('p-skm').textContent=f?(d.speed_kmh||0).toFixed(4):'--';
+  document.getElementById('p-smh').textContent=f?(d.speed_ms||0).toFixed(4):'--';
   document.getElementById('p-hdop').textContent=(d.hdop||0).toFixed(1);
   document.getElementById('p-al').innerHTML=f?((d.altitude||0).toFixed(2)+' <span class="u">m</span>'):'--';
   document.getElementById('tb-gid').textContent='🔲 '+(d.grid||'0');
