@@ -100,8 +100,9 @@ static bool parse_rmc(const char *line, gps_data_t *data)
 static void parse_gga(const char *line, gps_data_t *data)
 {
     if (strstr(line, "GGA") == NULL) return;
-    char buf[120];
+    char buf[256];
     strncpy(buf, line, sizeof(buf) - 1);
+    data->satellites = 0; data->hdop = 0; data->altitude = 0;
     int field = 0;
     for (char *p = buf; p && *p; p = strchr(p + 1, ',')) {
         field++;
