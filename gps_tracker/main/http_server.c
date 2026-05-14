@@ -34,8 +34,8 @@ static void build_gps_json(char *buf, size_t len)
     }
 
     char lat_str[32], lng_str[32], mag_str[16];
-    snprintf(lat_str, sizeof(lat_str), "%.6f %c", gps.latitude, gps.latitude_ns ? gps.latitude_ns : 'N');
-    snprintf(lng_str, sizeof(lng_str), "%.6f %c", gps.longitude, gps.longitude_ew ? gps.longitude_ew : 'E');
+    snprintf(lat_str, sizeof(lat_str), "%c %.6f", gps.latitude_ns ? gps.latitude_ns : 'N', fabs(gps.latitude));
+    snprintf(lng_str, sizeof(lng_str), "%c %.6f", gps.longitude_ew ? gps.longitude_ew : 'E', fabs(gps.longitude));
     snprintf(mag_str, sizeof(mag_str), "%.1f %c", gps.magnetic_variation, gps.magnetic_variation_dir ? gps.magnetic_variation_dir : 'E');
 
     char st = gps.mode ? gps.mode : (gps.status == 'A' ? 'A' : 'N');
